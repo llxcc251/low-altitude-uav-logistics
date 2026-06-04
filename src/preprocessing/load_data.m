@@ -2,7 +2,7 @@ function data = load_data()
 % LOAD_DATA 加载校区节点和订单数据
 %   data = load_data() 返回包含节点坐标、订单信息的结构体
 
-    base_dir = fullfile(fileparts(mfilename('fullpath')), '..', 'data', 'raw');
+    base_dir = fullfile(fileparts(mfilename('fullpath')), '..', '..', 'data', 'raw');
 
     % === 加载校区节点 ===
     raw = jsondecode(fileread(fullfile(base_dir, 'campus_nodes.json')));

@@ -4,6 +4,13 @@
 %  流程: 加载数据 → 生成候选方案 → 求解整数规划 → 输出结果
 
 clc; clear; close all;
+
+% 添加子目录到路径
+src_dir = fileparts(mfilename('fullpath'));
+addpath(fullfile(src_dir, 'model'));
+addpath(fullfile(src_dir, 'preprocessing'));
+addpath(fullfile(src_dir, 'utils'));
+
 fprintf('============================================\n');
 fprintf('  校园驿站快递配送 — 多无人机协同调度\n');
 fprintf('  中山大学深圳校区 · 运筹学大作业\n');
