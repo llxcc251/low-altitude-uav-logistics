@@ -1,0 +1,113 @@
+{
+  "description": "校园快递订单数据（10件）",
+  "drone_count": 5,
+  "cost_weights": {
+    "alpha": 1.0,
+    "beta": 0.3,
+    "gamma": 2.0
+  },
+  "drone_params": {
+    "W_max_kg": 2.5,
+    "E_battery_wh": 1000,
+    "v_cruise_ms": 15.0,
+    "t_max_min": 11.0,
+    "t_prep_min": 1.0,
+    "t_swap_min": 2.0,
+    "enable_cost": 100,
+    "split_penalty": 50,
+    "e0": 0.5,
+    "e1": 0.05
+  },
+  "orders": [
+    {
+      "id": 1,
+      "delivery_point": 1,
+      "name": "西园食堂",
+      "weight_kg": 0.68,
+      "ready_time_h": 8.32,
+      "tw_early_h": 8.43,
+      "tw_late_h": 8.75
+    },
+    {
+      "id": 2,
+      "delivery_point": 2,
+      "name": "相山餐厅",
+      "weight_kg": 0.45,
+      "ready_time_h": 8.87,
+      "tw_early_h": 9.11,
+      "tw_late_h": 9.58
+    },
+    {
+      "id": 3,
+      "delivery_point": 3,
+      "name": "博济广场",
+      "weight_kg": 1.16,
+      "ready_time_h": 11.21,
+      "tw_early_h": 11.32,
+      "tw_late_h": 11.62
+    },
+    {
+      "id": 4,
+      "delivery_point": 4,
+      "name": "相山广场",
+      "weight_kg": 1.23,
+      "ready_time_h": 11.51,
+      "tw_early_h": 11.65,
+      "tw_late_h": 12.06
+    },
+    {
+      "id": 5,
+      "delivery_point": 5,
+      "name": "逸仙广场",
+      "weight_kg": 0.31,
+      "ready_time_h": 12.11,
+      "tw_early_h": 12.33,
+      "tw_late_h": 12.78
+    },
+    {
+      "id": 6,
+      "delivery_point": 6,
+      "name": "百步梯",
+      "weight_kg": 0.56,
+      "ready_time_h": 14.4,
+      "tw_early_h": 14.64,
+      "tw_late_h": 14.98
+    },
+    {
+      "id": 7,
+      "delivery_point": 7,
+      "name": "体育馆",
+      "weight_kg": 0.46,
+      "ready_time_h": 14.98,
+      "tw_early_h": 15.15,
+      "tw_late_h": 15.42
+    },
+    {
+      "id": 8,
+      "delivery_point": 8,
+      "name": "西运动场",
+      "weight_kg": 1.54,
+      "ready_time_h": 17.42,
+      "tw_early_h": 17.64,
+      "tw_late_h": 18.09
+    },
+    {
+      "id": 9,
+      "delivery_point": 9,
+      "name": "东运动场",
+      "weight_kg": 1.24,
+      "ready_time_h": 17.77,
+      "tw_early_h": 18.06,
+      "tw_late_h": 18.4
+    },
+    {
+      "id": 10,
+      "delivery_point": 10,
+      "name": "佩雅食堂",
+      "weight_kg": 1.28,
+      "ready_time_h": 18.41,
+      "tw_early_h": 18.63,
+      "tw_late_h": 19.1
+    }
+  ]
+}
