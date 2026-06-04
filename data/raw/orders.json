@@ -1,113 +1,98 @@
 {
-  "description": "校园快递订单数据（10件）",
-  "drone_count": 5,
-  "cost_weights": {
-    "alpha": 1.0,
-    "beta": 0.3,
-    "gamma": 2.0
-  },
-  "drone_params": {
-    "W_max_kg": 2.5,
-    "E_battery_wh": 1000,
-    "v_cruise_ms": 15.0,
-    "t_max_min": 11.0,
-    "t_prep_min": 1.0,
-    "t_swap_min": 2.0,
-    "enable_cost": 100,
-    "split_penalty": 50,
-    "e0": 0.5,
-    "e1": 0.05
-  },
+  "description": "校园快递订单数据（8件，6架无人机，双起降点）",
+  "drone_count": 6,
+  "depots": [
+    "DEP_W",
+    "DEP_E"
+  ],
   "orders": [
     {
       "id": 1,
-      "delivery_point": 1,
-      "name": "西园食堂",
-      "weight_kg": 0.68,
+      "pickup_id": "CANTEEN_W",
+      "pickup_name": "西园食堂",
+      "delivery_id": "DORM_W",
+      "delivery_name": "西园宿舍区",
+      "weight_kg": 0.57,
       "ready_time_h": 8.32,
-      "tw_early_h": 8.43,
-      "tw_late_h": 8.75
+      "tw_early_h": 8.56,
+      "tw_late_h": 8.89
     },
     {
       "id": 2,
-      "delivery_point": 2,
-      "name": "相山餐厅",
-      "weight_kg": 0.45,
-      "ready_time_h": 8.87,
-      "tw_early_h": 9.11,
-      "tw_late_h": 9.58
+      "pickup_id": "CANTEEN_W",
+      "pickup_name": "西园食堂",
+      "delivery_id": "LIB",
+      "delivery_name": "图书馆学习区",
+      "weight_kg": 0.41,
+      "ready_time_h": 8.1,
+      "tw_early_h": 8.33,
+      "tw_late_h": 8.66
     },
     {
       "id": 3,
-      "delivery_point": 3,
-      "name": "博济广场",
-      "weight_kg": 1.16,
-      "ready_time_h": 11.21,
-      "tw_early_h": 11.32,
-      "tw_late_h": 11.62
+      "pickup_id": "CANTEEN_W",
+      "pickup_name": "西园食堂",
+      "delivery_id": "DORM_W",
+      "delivery_name": "西园宿舍区",
+      "weight_kg": 0.73,
+      "ready_time_h": 11.32,
+      "tw_early_h": 11.5,
+      "tw_late_h": 11.75
     },
     {
       "id": 4,
-      "delivery_point": 4,
-      "name": "相山广场",
-      "weight_kg": 1.23,
-      "ready_time_h": 11.51,
-      "tw_early_h": 11.65,
-      "tw_late_h": 12.06
+      "pickup_id": "GATE_S",
+      "pickup_name": "南门临时服务点",
+      "delivery_id": "DORM_W",
+      "delivery_name": "西园宿舍区",
+      "weight_kg": 0.67,
+      "ready_time_h": 14.32,
+      "tw_early_h": 14.47,
+      "tw_late_h": 14.89
     },
     {
       "id": 5,
-      "delivery_point": 5,
-      "name": "逸仙广场",
-      "weight_kg": 0.31,
-      "ready_time_h": 12.11,
-      "tw_early_h": 12.33,
-      "tw_late_h": 12.78
+      "pickup_id": "CANTEEN_W",
+      "pickup_name": "西园食堂",
+      "delivery_id": "DORM_W",
+      "delivery_name": "西园宿舍区",
+      "weight_kg": 0.68,
+      "ready_time_h": 17.16,
+      "tw_early_h": 17.34,
+      "tw_late_h": 17.59
     },
     {
       "id": 6,
-      "delivery_point": 6,
-      "name": "百步梯",
-      "weight_kg": 0.56,
-      "ready_time_h": 14.4,
-      "tw_early_h": 14.64,
-      "tw_late_h": 14.98
+      "pickup_id": "CANTEEN_E",
+      "pickup_name": "东园食堂",
+      "delivery_id": "DORM_E",
+      "delivery_name": "东园宿舍区",
+      "weight_kg": 0.62,
+      "ready_time_h": 11.03,
+      "tw_early_h": 11.22,
+      "tw_late_h": 11.47
     },
     {
       "id": 7,
-      "delivery_point": 7,
-      "name": "体育馆",
-      "weight_kg": 0.46,
-      "ready_time_h": 14.98,
-      "tw_early_h": 15.15,
-      "tw_late_h": 15.42
+      "pickup_id": "CANTEEN_E",
+      "pickup_name": "东园食堂",
+      "delivery_id": "DORM_E",
+      "delivery_name": "东园宿舍区",
+      "weight_kg": 0.76,
+      "ready_time_h": 17.05,
+      "tw_early_h": 17.21,
+      "tw_late_h": 17.46
     },
     {
       "id": 8,
-      "delivery_point": 8,
-      "name": "西运动场",
-      "weight_kg": 1.54,
-      "ready_time_h": 17.42,
-      "tw_early_h": 17.64,
-      "tw_late_h": 18.09
-    },
-    {
-      "id": 9,
-      "delivery_point": 9,
-      "name": "东运动场",
-      "weight_kg": 1.24,
-      "ready_time_h": 17.77,
-      "tw_early_h": 18.06,
-      "tw_late_h": 18.4
-    },
-    {
-      "id": 10,
-      "delivery_point": 10,
-      "name": "佩雅食堂",
-      "weight_kg": 1.28,
-      "ready_time_h": 18.41,
-      "tw_early_h": 18.63,
-      "tw_late_h": 19.1
+      "pickup_id": "RESTAURANT_X",
+      "pickup_name": "相山餐厅",
+      "delivery_id": "LIB",
+      "delivery_name": "图书馆学习区",
+      "weight_kg": 0.55,
+      "ready_time_h": 11.15,
+      "tw_early_h": 11.39,
+      "tw_late_h": 11.72
     }
   ]
 }

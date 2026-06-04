@@ -15,26 +15,17 @@ cfg = config();
 data = load_data();
 fprintf('\n');
 
-%% Step 2: 显示距离矩阵
-fprintf('[Step 2] 距离矩阵 (m):\n');
-fprintf('%8s', '驿站');
+%% Step 2: 显示订单信息
+fprintf('[Step 2] 订单信息:\n');
+fprintf('%3s  %-10s -> %-8s  %5s  %6s  %s\n', ...
+        'ID', '取货', '配送', '重量', '可出发', '时间窗');
 for j = 1:data.n_orders
-    fprintf('  %6s', data.orders(j).name(1:3));
+    fprintf('%3d  %-10s -> %-8s  %5.1fkg  %5.2fh  [%.2f, %.2f]\n', ...
+            data.orders(j).id, data.orders(j).pickup_name, ...
+            data.orders(j).delivery_name, data.orders(j).weight, ...
+            data.orders(j).S, data.orders(j).a, data.orders(j).b);
 end
 fprintf('\n');
-fprintf('%8s', '---');
-for j = 1:data.n_orders
-    fprintf('  ------');
-end
-fprintf('\n');
-
-% 驿站到各配送点的距离
-fprintf('%8s', '驿站');
-for j = 1:data.n_orders
-    pt_id = data.orders(j).point_id;
-    fprintf('  %6.0f', data.dist(1, pt_id+1));
-end
-fprintf('\n\n');
 
 %% Step 3: 生成候选方案
 fprintf('[Step 3] 生成候选调度方案...\n');
@@ -66,12 +57,14 @@ if exitflag > 0
 
         for t = 1:scheme.n_trips
             trip = scheme.trips{t};
-            fprintf('  趋 %d: 驿站', t);
+            fprintf('  趟 %d: 起降点', t);
             for k2 = 1:length(trip.seq)
                 j = trip.seq(k2);
-                fprintf(' → %s(%.1fkg)', data.orders(j).name, data.orders(j).weight);
+                fprintf(' → %s(%.1fkg) → %s', ...
+                        data.orders(j).pickup_name, data.orders(j).weight, ...
+                        data.orders(j).delivery_name);
             end
-            fprintf(' → 驿站\n');
+            fprintf(' → 起降点\n');
             fprintf('    时间 %.2fh, 能耗 %.2fWh, 超时 %.4fh\n', ...
                     trip.time_h, trip.energy_wh, trip.late_h);
         end

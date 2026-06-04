@@ -3,7 +3,7 @@ function cfg = config()
 %   cfg = config() 返回默认参数结构体
 
     % === 无人机参数（美团 M4）===
-    cfg.n_drones = 5;              % 无人机数量
+    cfg.n_drones = 6;              % 无人机数量
     cfg.W_max = 2.5;               % 最大载重 (kg)
     cfg.E_battery = 1000;          % 电池容量 (Wh)
     cfg.v_cruise = 15.0;           % 巡航速度 (m/s)

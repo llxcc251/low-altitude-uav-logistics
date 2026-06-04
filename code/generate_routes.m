@@ -1,7 +1,7 @@
 function routes = generate_routes(data, cfg)
 % GENERATE_ROUTES 为每架无人机生成候选调度方案
-%   简化版: 每条候选路线 = 一趟配送（驿站→若干配送点→驿站）
-%   所有无人机共享同一组候选路线
+%   支持多个起降点：每条路线从最近的起降点出发并返回
+%   路线结构: 起降点 -> (取货->配送) x N -> 起降点
 
     m = data.n_orders;
     max_q = min(cfg.max_orders_per_trip, m);
@@ -43,7 +43,6 @@ function routes = generate_routes(data, cfg)
         schemes{end+1} = scheme;
     end
 
-    % 每架无人机共享
     routes = cell(cfg.n_drones, 1);
     for i = 1:cfg.n_drones
         routes{i} = schemes;
@@ -51,46 +50,71 @@ function routes = generate_routes(data, cfg)
 
     fprintf('    候选方案: %d 条\n', length(schemes));
 
-    % 验证覆盖
     covered = zeros(1, m);
     for s = 1:length(schemes)
         covered = covered | schemes{s}.A;
     end
     uncovered = find(~covered);
     if ~isempty(uncovered)
-        fprintf('    ⚠ 快递 %s 无覆盖\n', mat2str(uncovered));
+        fprintf('    警告: 快递 %s 无覆盖\n', mat2str(uncovered));
     else
-        fprintf('    ✓ 全部 %d 件快递均有覆盖\n', m);
+        fprintf('    全部 %d 件快递均有覆盖\n', m);
     end
 end
 
 % ====================================================================
-% 最近邻排序
+% 最近邻排序（自动选最近起降点）
 % ====================================================================
 function seq = nearest_neighbor_seq(order_ids, data)
     remaining = order_ids;
     seq = [];
-    current_pos = [data.station.x, data.station.y];
+
+    % 找最近的起降点作为起点
+    depot_idx = find(strcmp({data.nodes.type}, 'depot'));
+    best_dist = inf;
+    best_dep = depot_idx(1);
+    for d = 1:length(depot_idx)
+        dx = data.nodes(depot_idx(d)).x;
+        dy = data.nodes(depot_idx(d)).y;
+        % 算到所有待送订单取货点的总距离
+        total_d = 0;
+        for k = 1:length(order_ids)
+            pk = find(strcmp(data.node_ids, data.orders(order_ids(k)).pickup_id));
+            total_d = total_d + norm([dx, dy] - [data.node_x(pk), data.node_y(pk)]);
+        end
+        if total_d < best_dist
+            best_dist = total_d;
+            best_dep = depot_idx(d);
+        end
+    end
+    cx = data.nodes(best_dep).x;
+    cy = data.nodes(best_dep).y;
+
     while ~isempty(remaining)
         best_dist = inf;
         best_idx = 1;
         for k = 1:length(remaining)
-            pt_id = data.orders(remaining(k)).point_id;
-            d = norm(current_pos - [data.points(pt_id).x, data.points(pt_id).y]);
+            j = remaining(k);
+            pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
+            px = data.node_x(pk);
+            py = data.node_y(pk);
+            d = norm([cx, cy] - [px, py]);
             if d < best_dist
                 best_dist = d;
                 best_idx = k;
             end
         end
         seq = [seq, remaining(best_idx)];
-        pt_id = data.orders(remaining(best_idx)).point_id;
-        current_pos = [data.points(pt_id).x, data.points(pt_id).y];
+        pk = find(strcmp(data.node_ids, data.orders(remaining(best_idx)).pickup_id));
+        cx = data.node_x(pk);
+        cy = data.node_y(pk);
         remaining(best_idx) = [];
     end
 end
 
 % ====================================================================
 % 评估单趟路线
+%   路径: 起降点 -> (取货->配送) x N -> 起降点
 % ====================================================================
 function [ok, trip] = evaluate_trip(seq, data, cfg)
     ok = false;
@@ -103,21 +127,50 @@ function [ok, trip] = evaluate_trip(seq, data, cfg)
     total_late_h = 0;
     current_load_kg = sum([data.orders(seq).weight]);
 
-    cx = data.station.x;
-    cy = data.station.y;
+    % 自动选最近起降点
+    depot_idx = find(strcmp({data.nodes.type}, 'depot'));
+    best_dist = inf;
+    best_dep = depot_idx(1);
+    for d = 1:length(depot_idx)
+        dx = data.nodes(depot_idx(d)).x;
+        dy = data.nodes(depot_idx(d)).y;
+        total_d = 0;
+        for k = 1:length(seq)
+            pk = find(strcmp(data.node_ids, data.orders(seq(k)).pickup_id));
+            total_d = total_d + norm([dx, dy] - [data.node_x(pk), data.node_y(pk)]);
+        end
+        if total_d < best_dist
+            best_dist = total_d;
+            best_dep = depot_idx(d);
+        end
+    end
+    cx = data.nodes(best_dep).x;
+    cy = data.nodes(best_dep).y;
 
     for k = 1:m_orders
         j = seq(k);
-        pt_id = data.orders(j).point_id;
-        px = data.points(pt_id).x;
-        py = data.points(pt_id).y;
 
-        d = norm([cx, cy] - [px, py]);
-        [t_seg, e_seg] = calc_cost_segment(d, current_load_kg, cfg);
-        flight_time_h = flight_time_h + t_seg;
-        elapsed_time_h = elapsed_time_h + t_seg;
-        total_energy_wh = total_energy_wh + e_seg;
+        % 飞到取货点
+        pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
+        ppx = data.node_x(pk);
+        ppy = data.node_y(pk);
+        d1 = norm([cx, cy] - [ppx, ppy]);
+        [t1, e1] = calc_cost_segment(d1, current_load_kg, cfg);
+        flight_time_h = flight_time_h + t1;
+        elapsed_time_h = elapsed_time_h + t1;
+        total_energy_wh = total_energy_wh + e1;
 
+        % 飞到配送点
+        dk = find(strcmp(data.node_ids, data.orders(j).delivery_id));
+        dkx = data.node_x(dk);
+        dky = data.node_y(dk);
+        d2 = norm([ppx, ppy] - [dkx, dky]);
+        [t2, e2] = calc_cost_segment(d2, current_load_kg, cfg);
+        flight_time_h = flight_time_h + t2;
+        elapsed_time_h = elapsed_time_h + t2;
+        total_energy_wh = total_energy_wh + e2;
+
+        % 到达时间
         arrive_time = data.orders(j).S + elapsed_time_h;
         if arrive_time < data.orders(j).a
             elapsed_time_h = elapsed_time_h + (data.orders(j).a - arrive_time);
@@ -128,11 +181,12 @@ function [ok, trip] = evaluate_trip(seq, data, cfg)
         end
 
         current_load_kg = current_load_kg - data.orders(j).weight;
-        cx = px;
-        cy = py;
+        cx = dkx;
+        cy = dky;
     end
 
-    d_return = norm([cx, cy] - [data.station.x, data.station.y]);
+    % 返回起降点
+    d_return = norm([cx, cy] - [data.nodes(best_dep).x, data.nodes(best_dep).y]);
     [t_ret, e_ret] = calc_cost_segment(d_return, 0, cfg);
     flight_time_h = flight_time_h + t_ret;
     elapsed_time_h = elapsed_time_h + t_ret;

@@ -2,54 +2,60 @@ function data = load_data()
 % LOAD_DATA 加载校区节点和订单数据
 %   data = load_data() 返回包含节点坐标、订单信息的结构体
 
+    base_dir = fullfile(fileparts(mfilename('fullpath')), '..', 'data', 'raw');
+
     % === 加载校区节点 ===
-    node_file = fullfile(fileparts(mfilename('fullpath')), '..', 'data', 'raw', 'campus_nodes.json');
-    raw = jsondecode(fileread(node_file));
+    raw = jsondecode(fileread(fullfile(base_dir, 'campus_nodes.json')));
 
-    % 驿站坐标
-    data.station.x = raw.station.x;
-    data.station.y = raw.station.y;
-    data.station.name = raw.station.name;
+    data.nodes = struct();
+    for i = 1:length(raw.nodes)
+        data.nodes(i).id = raw.nodes(i).id;
+        data.nodes(i).name = raw.nodes(i).name;
+        data.nodes(i).type = raw.nodes(i).type;
+        data.nodes(i).x = raw.nodes(i).x;
+        data.nodes(i).y = raw.nodes(i).y;
+    end
 
-    % 配送点坐标
-    n_points = length(raw.delivery_points);
-    data.points = struct();
-    for i = 1:n_points
-        data.points(i).id = raw.delivery_points(i).id;
-        data.points(i).name = raw.delivery_points(i).name;
-        data.points(i).x = raw.delivery_points(i).x;
-        data.points(i).y = raw.delivery_points(i).y;
+    % 找出起降点
+    data.depots = {};
+    for i = 1:length(data.nodes)
+        if strcmp(data.nodes(i).type, 'depot')
+            data.depots{end+1} = data.nodes(i);
+        end
     end
 
     % === 加载订单数据 ===
-    order_file = fullfile(fileparts(mfilename('fullpath')), '..', 'data', 'raw', 'orders.json');
-    raw_order = jsondecode(fileread(order_file));
+    raw_order = jsondecode(fileread(fullfile(base_dir, 'orders.json')));
 
     data.n_orders = length(raw_order.orders);
     data.orders = struct();
     for j = 1:data.n_orders
         data.orders(j).id = raw_order.orders(j).id;
-        data.orders(j).point_id = raw_order.orders(j).delivery_point;
-        data.orders(j).name = raw_order.orders(j).name;
+        data.orders(j).pickup_id = raw_order.orders(j).pickup_id;
+        data.orders(j).pickup_name = raw_order.orders(j).pickup_name;
+        data.orders(j).delivery_id = raw_order.orders(j).delivery_id;
+        data.orders(j).delivery_name = raw_order.orders(j).delivery_name;
         data.orders(j).weight = raw_order.orders(j).weight_kg;
-        data.orders(j).S = raw_order.orders(j).ready_time_h;       % 可出发时间
-        data.orders(j).a = raw_order.orders(j).tw_early_h;         % 最早送达
-        data.orders(j).b = raw_order.orders(j).tw_late_h;          % 最晚送达
+        data.orders(j).S = raw_order.orders(j).ready_time_h;
+        data.orders(j).a = raw_order.orders(j).tw_early_h;
+        data.orders(j).b = raw_order.orders(j).tw_late_h;
     end
 
+    % === 计算节点坐标表 ===
+    data.node_ids = {data.nodes.id};
+    data.node_x = [data.nodes.x];
+    data.node_y = [data.nodes.y];
+
     % === 计算距离矩阵 ===
-    N = 1 + n_points;  % 驿站 + 配送点
+    N = length(data.nodes);
     data.dist = zeros(N, N);
-    coords = [data.station.x, data.station.y];
-    for i = 1:n_points
-        coords = [coords; data.points(i).x, data.points(i).y];
-    end
     for u = 1:N
         for v = 1:N
-            data.dist(u, v) = norm(coords(u,:) - coords(v,:));
+            data.dist(u, v) = norm([data.node_x(u)-data.node_x(v), ...
+                                     data.node_y(u)-data.node_y(v)]);
         end
     end
 
-    fprintf('数据加载完成: %d 架无人机, %d 件快递, %d 个配送点\n', ...
-            raw_order.drone_count, data.n_orders, n_points);
+    fprintf('数据加载完成: %d 架无人机, %d 件快递, %d 个节点\n', ...
+            raw_order.drone_count, data.n_orders, length(data.nodes));
 end

@@ -1,43 +1,15 @@
 {
-  "description": "中山大学深圳校区配送节点数据",
-  "center": {
-    "lon": 113.950716,
-    "lat": 22.801460,
-    "note": "校区几何中心（原点），平面坐标单位为m"
-  },
-  "station": {
-    "id": "s",
-    "name": "西园快递站",
-    "lon": 113.951416,
-    "lat": 22.799250,
-    "x": 72,
-    "y": -244
-  },
-  "delivery_points": [
-    {"id": 1, "name": "西园食堂",   "lon": 113.946085, "lat": 22.797282, "x": -475, "y": -462},
-    {"id": 2, "name": "相山餐厅",   "lon": 113.953076, "lat": 22.798995, "x":  242, "y": -273},
-    {"id": 3, "name": "博济广场",   "lon": 113.948615, "lat": 22.797100, "x": -216, "y": -482},
-    {"id": 4, "name": "相山广场",   "lon": 113.953317, "lat": 22.800689, "x":  267, "y":  -85},
-    {"id": 5, "name": "逸仙广场",   "lon": 113.955379, "lat": 22.798175, "x":  479, "y": -363},
-    {"id": 6, "name": "百步梯",     "lon": 113.952854, "lat": 22.800039, "x":  219, "y": -157},
-    {"id": 7, "name": "体育馆",     "lon": 113.950548, "lat": 22.804128, "x":  -17, "y":  295},
-    {"id": 8, "name": "西运动场",   "lon": 113.945715, "lat": 22.799320, "x": -513, "y": -237},
-    {"id": 9, "name": "东运动场",   "lon": 113.959027, "lat": 22.802183, "x":  853, "y":   80},
-    {"id": 10,"name": "佩雅食堂",   "lon": 113.938825, "lat": 22.795825, "x": -1220,"y": -623}
-  ],
-  "gates": [
-    {"name": "正门(南门)", "lon": 113.9471998, "lat": 22.7994467},
-    {"name": "西门",       "lon": 113.9410788, "lat": 22.7996575},
-    {"name": "东南门",     "lon": 113.9550815, "lat": 22.8022324},
-    {"name": "东门",       "lon": 113.9595048, "lat": 22.8045051}
-  ],
-  "campus_bounds": {
-    "lon_min": 113.941079,
-    "lon_max": 113.959505,
-    "lat_min": 22.799447,
-    "lat_max": 22.804505,
-    "width_m": 1891,
-    "height_m": 559,
-    "area_km2": 1.06
-  }
+  "description": "中山大学深圳校区配送节点数据（来源：OpenStreetMap + 模型估算）",
+  "source": "node_info_simplified.csv",
+  "nodes": [
+    {"id": "DEP_W",      "name": "西区无人机起降点", "type": "depot",    "x": 260,  "y": 430,  "can_takeoff": true, "can_land": true},
+    {"id": "DEP_E",      "name": "东区无人机起降点", "type": "depot",    "x": 1060, "y": 880,  "can_takeoff": true, "can_land": true},
+    {"id": "CANTEEN_W",  "name": "西园食堂",        "type": "pickup",   "x": 525,  "y": 520,  "can_takeoff": false,"can_land": true},
+    {"id": "CANTEEN_E",  "name": "东园食堂",        "type": "pickup",   "x": 1125, "y": 920,  "can_takeoff": false,"can_land": true},
+    {"id": "RESTAURANT_X","name": "相山餐厅",       "type": "pickup",   "x": 720,  "y": 715,  "can_takeoff": false,"can_land": true},
+    {"id": "GATE_S",     "name": "南门临时服务点",   "type": "pickup",   "x": 800,  "y": 160,  "can_takeoff": false,"can_land": true},
+    {"id": "DORM_W",     "name": "西园宿舍区",      "type": "delivery", "x": 267,  "y": 768,  "can_takeoff": false,"can_land": true},
+    {"id": "DORM_E",     "name": "东园宿舍区",      "type": "delivery", "x": 1240, "y": 1080, "can_takeoff": false,"can_land": true},
+    {"id": "LIB",        "name": "图书馆学习区",    "type": "delivery", "x": 640,  "y": 865,  "can_takeoff": false,"can_land": true}
+  ]
 }
