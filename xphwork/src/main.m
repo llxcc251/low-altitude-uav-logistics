@@ -10,6 +10,7 @@ src_dir = fileparts(mfilename('fullpath'));
 addpath(fullfile(src_dir, 'model'));
 addpath(fullfile(src_dir, 'preprocessing'));
 addpath(fullfile(src_dir, 'utils'));
+addpath(fullfile(src_dir, 'algorithms'));
 
 fprintf('============================================\n');
 fprintf('  校园驿站快递配送 — 多无人机协同调度\n');
@@ -58,8 +59,7 @@ if exitflag > 0
         scheme = sol.selected(k).scheme;
 
         fprintf('\n无人机 %d (启用成本 %d):\n', drone_idx, cfg.enable_cost);
-        fprintf('  总时间: %.2f h, 总能耗: %.2f Wh, 超时: %.4f h\n', ...
-                scheme.T, scheme.E, scheme.L);
+        fprintf('  总时间: %.2f h, 超时: %.4f h\n', scheme.T, scheme.L);
         fprintf('  综合成本 C = %.2f\n', scheme.C);
 
         for t = 1:scheme.n_trips
@@ -72,8 +72,7 @@ if exitflag > 0
                         data.orders(j).delivery_name);
             end
             fprintf(' → 起降点\n');
-            fprintf('    时间 %.2fh, 能耗 %.2fWh, 超时 %.4fh\n', ...
-                    trip.time_h, trip.energy_wh, trip.late_h);
+            fprintf('    时间 %.2fh, 超时 %.4fh\n', trip.time_h, trip.late_h);
         end
     end
 

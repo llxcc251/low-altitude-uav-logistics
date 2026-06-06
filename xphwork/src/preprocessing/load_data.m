@@ -46,14 +46,38 @@ function data = load_data()
     data.node_x = [data.nodes.x];
     data.node_y = [data.nodes.y];
 
-    % === 计算距离矩阵 ===
-    N = length(data.nodes);
-    data.dist = zeros(N, N);
-    for u = 1:N
-        for v = 1:N
-            data.dist(u, v) = norm([data.node_x(u)-data.node_x(v), ...
-                                     data.node_y(u)-data.node_y(v)]);
+    % === 加载距离矩阵（实际飞行距离，含绕行系数）===
+    dist_file = fullfile(base_dir, 'distance_matrix.csv');
+    if exist(dist_file, 'file')
+        fid = fopen(dist_file, 'r');
+        fgetl(fid);  % 跳过表头
+        N = length(data.nodes);
+        data.dist = zeros(N, N);
+        while ~feof(fid)
+            line = fgetl(fid);
+            parts = strsplit(line, ',');
+            from = strtrim(parts{1});
+            to = strtrim(parts{2});
+            d = str2double(parts{3});
+            fi = find(strcmp(data.node_ids, from));
+            ti = find(strcmp(data.node_ids, to));
+            if ~isempty(fi) && ~isempty(ti)
+                data.dist(fi, ti) = d;
+            end
         end
+        fclose(fid);
+        fprintf('距离矩阵: 从 distance_matrix.csv 加载（实际飞行距离）\n');
+    else
+        % 回退：用直线距离
+        N = length(data.nodes);
+        data.dist = zeros(N, N);
+        for u = 1:N
+            for v = 1:N
+                data.dist(u, v) = norm([data.node_x(u)-data.node_x(v), ...
+                                         data.node_y(u)-data.node_y(v)]);
+            end
+        end
+        fprintf('距离矩阵: 使用直线距离（未找到 distance_matrix.csv）\n');
     end
 
     fprintf('数据加载完成: %d 架无人机, %d 件快递, %d 个节点\n', ...

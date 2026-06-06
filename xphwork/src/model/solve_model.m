@@ -102,12 +102,10 @@ function [sol, exitflag] = solve_model(routes, data, cfg)
     % 统计
     sol.n_enabled = sum(sol.x > 0.5);
     sol.total_time_h = 0;
-    sol.total_energy_wh = 0;
     sol.total_late_h = 0;
     for k = 1:sol.selected_count
         s = sol.selected(k).scheme;
         sol.total_time_h = sol.total_time_h + s.T;
-        sol.total_energy_wh = sol.total_energy_wh + s.E;
         sol.total_late_h = sol.total_late_h + s.L;
     end
 
