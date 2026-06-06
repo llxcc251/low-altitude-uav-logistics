@@ -175,9 +175,6 @@ t_{\text{flight}} + t_{\text{deliver}} + t_{\text{return}} \leq T_{\max}
 \begin{itemize}[leftmargin=2em]
   \item \textbf{随机搜索（Random Search）：} 对每种无人机数量（1--$n$ 架），各随机生成 100 个分配方案，用统一评估函数检查可行性，取全局最优。简单高效，适合作为基准。
   \item \textbf{遗传算法（Genetic Algorithm）：} 种群大小 100，迭代 200 代。采用锦标赛选择（$k=5$）、均匀交叉（概率 0.85）、多点变异（概率 0.15）。精英保留策略（5\%），以随机搜索最优解作为种子个体。搜索范围广，适合跳出局部最优。
-  \item \textbf{贪心指派：} 每件快递按时间窗排序，分配给最近且可行的无人机。
-  \item \textbf{最邻近法：} 每架无人机从起降点出发，每次选最近的未服务快递。
-  \item \textbf{模拟退火（SA）：} 以随机搜索解为初始温度，邻域搜索跳出局部最优。
 \end{itemize}
 
 所有启发式算法共用统一的评估函数 \texttt{eval\_solution}，确保约束检查和成本计算的一致性。
