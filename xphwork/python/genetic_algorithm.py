@@ -14,7 +14,7 @@ def genetic_algorithm(data, cfg):
 
     # === GA 参数 ===
     pop_size = 100       # 种群大小
-    n_gen = 200          # 迭代代数
+    n_gen = 500          # 迭代代数
     pc = 0.85            # 交叉概率
     pm = 0.15            # 变异概率
     elite_ratio = 0.05   # 精英比例
