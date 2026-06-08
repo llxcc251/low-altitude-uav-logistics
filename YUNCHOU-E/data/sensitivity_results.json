@@ -1,0 +1,178 @@
+{
+  "method": "genetic_algorithm",
+  "note": "每个参数点单次重新运行 team_python 遗传算法；除当前变量外，其余参数保持基准值。",
+  "generated_at": "2026-06-07T21:08:00",
+  "baseline": {
+    "drone_count": 8,
+    "speed_ms": 15.0,
+    "capacity_kg": 2.5
+  },
+  "drones": [
+    {
+      "value": 1,
+      "total_cost": 848.865659,
+      "enabled_drones": 1,
+      "total_time_h": 6.9529,
+      "total_time_s": 25030.44,
+      "total_late_h": 420.70638,
+      "runtime_s": 7.826
+    },
+    {
+      "value": 2,
+      "total_cost": 32.800378,
+      "enabled_drones": 2,
+      "total_time_h": 6.561563,
+      "total_time_s": 23621.627,
+      "total_late_h": 12.619407,
+      "runtime_s": 7.667
+    },
+    {
+      "value": 3,
+      "total_cost": 7.555122,
+      "enabled_drones": 3,
+      "total_time_h": 6.053533,
+      "total_time_s": 21792.72,
+      "total_late_h": 0.000794,
+      "runtime_s": 7.109
+    },
+    {
+      "value": 4,
+      "total_cost": 7.826233,
+      "enabled_drones": 4,
+      "total_time_h": 5.826233,
+      "total_time_s": 20974.44,
+      "total_late_h": 0.0,
+      "runtime_s": 6.841
+    },
+    {
+      "value": 5,
+      "total_cost": 7.969281,
+      "enabled_drones": 4,
+      "total_time_h": 5.969281,
+      "total_time_s": 21489.413,
+      "total_late_h": 0.0,
+      "runtime_s": 8.325
+    },
+    {
+      "value": 6,
+      "total_cost": 7.914072,
+      "enabled_drones": 4,
+      "total_time_h": 5.914072,
+      "total_time_s": 21290.66,
+      "total_late_h": 0.0,
+      "runtime_s": 10.971
+    },
+    {
+      "value": 7,
+      "total_cost": 7.893376,
+      "enabled_drones": 4,
+      "total_time_h": 5.893376,
+      "total_time_s": 21216.153,
+      "total_late_h": 0.0,
+      "runtime_s": 6.349
+    },
+    {
+      "value": 8,
+      "total_cost": 7.701711,
+      "enabled_drones": 3,
+      "total_time_h": 6.194556,
+      "total_time_s": 22300.4,
+      "total_late_h": 0.003578,
+      "runtime_s": 7.084
+    }
+  ],
+  "speed": [
+    {
+      "value": 10,
+      "total_cost": 10.825814,
+      "enabled_drones": 5,
+      "total_time_h": 8.325814,
+      "total_time_s": 29972.93,
+      "total_late_h": 0.0,
+      "runtime_s": 6.121
+    },
+    {
+      "value": 12,
+      "total_cost": 9.293685,
+      "enabled_drones": 4,
+      "total_time_h": 7.291606,
+      "total_time_s": 26249.783,
+      "total_late_h": 0.001039,
+      "runtime_s": 5.996
+    },
+    {
+      "value": 15,
+      "total_cost": 7.852976,
+      "enabled_drones": 4,
+      "total_time_h": 5.852976,
+      "total_time_s": 21070.713,
+      "total_late_h": 0.0,
+      "runtime_s": 6.168
+    },
+    {
+      "value": 18,
+      "total_cost": 6.743386,
+      "enabled_drones": 3,
+      "total_time_h": 5.241173,
+      "total_time_s": 18868.222,
+      "total_late_h": 0.001106,
+      "runtime_s": 5.989
+    },
+    {
+      "value": 20,
+      "total_cost": 6.2564,
+      "enabled_drones": 3,
+      "total_time_h": 4.7564,
+      "total_time_s": 17123.04,
+      "total_late_h": 0.0,
+      "runtime_s": 5.912
+    }
+  ],
+  "capacity": [
+    {
+      "value": 1.5,
+      "total_cost": 8.431907,
+      "enabled_drones": 4,
+      "total_time_h": 6.431907,
+      "total_time_s": 23154.867,
+      "total_late_h": 0.0,
+      "runtime_s": 6.681
+    },
+    {
+      "value": 2.0,
+      "total_cost": 8.059585,
+      "enabled_drones": 4,
+      "total_time_h": 6.059585,
+      "total_time_s": 21814.507,
+      "total_late_h": 0.0,
+      "runtime_s": 6.246
+    },
+    {
+      "value": 2.5,
+      "total_cost": 7.994589,
+      "enabled_drones": 4,
+      "total_time_h": 5.994589,
+      "total_time_s": 21580.52,
+      "total_late_h": 0.0,
+      "runtime_s": 6.215
+    },
+    {
+      "value": 3.0,
+      "total_cost": 7.616424,
+      "enabled_drones": 3,
+      "total_time_h": 6.116424,
+      "total_time_s": 22019.127,
+      "total_late_h": 0.0,
+      "runtime_s": 6.016
+    },
+    {
+      "value": 3.5,
+      "total_cost": 7.397887,
+      "enabled_drones": 3,
+      "total_time_h": 5.897887,
+      "total_time_s": 21232.393,
+      "total_late_h": 0.0,
+      "runtime_s": 5.698
+    }
+  ]
+}
