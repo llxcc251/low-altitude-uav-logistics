@@ -23,6 +23,5 @@ Thumbs.db
 .playwright-mcp/
 
 # Assets (large files)
-*.pdf
 *.pptx
 *.docx
