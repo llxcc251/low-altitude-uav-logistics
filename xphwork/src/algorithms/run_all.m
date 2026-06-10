@@ -17,11 +17,11 @@ function run_all()
     data = load_data();
 
     fprintf('数据: %d 架无人机, %d 件快递\n', cfg.n_drones, data.n_orders);
-    fprintf('费用: 启用=%.1f, 时间=%.1f, 超时=%.1f\n\n', ...
-            cfg.enable_cost, cfg.alpha, cfg.gamma);
+    fprintf('费用: 启用=%.1f, 能耗=%.3f, 超时=%.1f, 换电=%.1f\n\n', ...
+            cfg.enable_cost, cfg.alpha, cfg.gamma, cfg.swap_cost);
 
     methods = {'random_search', 'genetic_algorithm'};
-    names = {'随机×100/架', '遗传算法'};
+    names = {'随机×500/架', '遗传算法'};
 
     results = cell(length(methods), 1);
     times = zeros(length(methods), 1);
@@ -37,7 +37,7 @@ function run_all()
             case 'savings'
                 results{m} = savings(data, cfg);
             case 'random_search'
-                results{m} = random_search(data, cfg, 100);
+                results{m} = random_search(data, cfg, 500);
             case 'genetic_algorithm'
                 results{m} = genetic_algorithm(data, cfg);
         end
@@ -69,8 +69,8 @@ function run_all()
     fprintf('============================================\n');
     fprintf('  对比结果\n');
     fprintf('============================================\n');
-    fprintf('%-12s %8s %6s %8s %10s %10s\n', '方法', '总成本', '启用数', '超时(min)', '总用时(min)', '计算耗时(s)');
-    fprintf('%-12s %8s %6s %8s %10s %10s\n', '--------', '--------', '------', '--------', '----------', '----------');
+    fprintf('%-12s %8s %6s %10s %8s %10s\n', '方法', '总成本', '启用数', '总能耗(Wh)', '超时(min)', '计算耗时(s)');
+    fprintf('%-12s %8s %6s %10s %8s %10s\n', '--------', '--------', '------', '----------', '--------', '----------');
 
     % 找最优成本
     costs = cellfun(@(r) r.total_cost, results);
@@ -91,11 +91,11 @@ function run_all()
         r = results{m};
         if best_cost > 0
             gap = (r.total_cost - best_cost) / best_cost * 100;
-            fprintf('%-12s %8.1f %6d %8.1f %10.1f %10.2f  (gap %.1f%%)\n', ...
-                    names{m}, r.total_cost, r.n_enabled, r.total_late*60, r.total_time*60, times(m), gap);
+            fprintf('%-12s %8.1f %6d %10.0f %8.1f %10.2f  (gap %.1f%%)\n', ...
+                    names{m}, r.total_cost, r.n_enabled, r.total_energy, r.total_late*60, times(m), gap);
         else
-            fprintf('%-12s %8.1f %6d %8.1f %10.1f %10.2f\n', ...
-                    names{m}, r.total_cost, r.n_enabled, r.total_late*60, r.total_time*60, times(m));
+            fprintf('%-12s %8.1f %6d %10.0f %8.1f %10.2f\n', ...
+                    names{m}, r.total_cost, r.n_enabled, r.total_energy, r.total_late*60, times(m));
         end
     end
     fprintf('\n');
@@ -111,7 +111,11 @@ function run_all()
         route = best.routes{k};
         depot_name = '驿站';
         if isfield(route, 'depot_name'), depot_name = route.depot_name; end
-        fprintf('\n无人机 %d [%s]  %.1fmin:\n', route.drone, depot_name, route.time*60);
+        if isfield(route, 'energy')
+            fprintf('\n无人机 %d [%s]  %.0fWh:\n', route.drone, depot_name, route.energy);
+        else
+            fprintf('\n无人机 %d [%s]:\n', route.drone, depot_name);
+        end
 
         if isfield(route, 'details') && ~isempty(route.details)
             fprintf('  详细路径:\n');

@@ -1,45 +1,35 @@
-# random_search.py - 随机搜索算法
+# random_search.py - 随机搜索算法（队列装箱版）
 
 import random
 from eval_solution import eval_solution
 
-class Route:
-    def __init__(self):
-        self.drone = 0
-        self.orders = []
-        self.time = 0
-        self.late = 0
-        self.cost = 0
-        self.depot_name = ""
-        self.details = []
 
-class Solution:
-    def __init__(self):
-        self.routes = []
-        self.n_enabled = 0
-        self.total_time = 0
-        self.total_late = 0
-        self.total_cost = 0
+def smart_random_assignment(n_drones, n_orders, data, cfg):
+    """智能随机分配：按重量排序，贪心分配"""
+    assignment = [0] * n_orders
+    weights = [data.orders[j].weight for j in range(n_orders)]
+    weight_order = sorted(range(n_orders), key=lambda j: -weights[j])
+    drone_load = [0.0] * n_drones
 
-def random_search(data, cfg, n_trials=100):
-    """
-    随机搜索算法
-    对每种无人机数量（1~n_drones），各随机 n_trials 次，取全局最优
-    """
+    for j in weight_order:
+        w = data.orders[j].weight
+        candidates = [d for d in range(n_drones) if drone_load[d] + w <= cfg.W_max]
+        if candidates:
+            d = random.choice(candidates)
+            assignment[j] = d + 1
+            drone_load[d] += w
+        else:
+            assignment[j] = random.randint(1, n_drones)
+    return assignment
+
+
+def random_search(data, cfg, n_trials=500):
     best_cost = float('inf')
-    best_sol = Solution()
-
-    # 按时间窗排序
-    time_order = sorted(range(data.n_orders), key=lambda j: data.orders[j].a)
+    best_sol = None
 
     for n_use in range(1, cfg.n_drones + 1):
         for trial in range(n_trials):
-            # 随机分配
-            assignment = [0] * data.n_orders
-            for k in range(data.n_orders):
-                assignment[time_order[k]] = random.randint(1, n_use)
-
-            # 评估
+            assignment = smart_random_assignment(n_use, data.n_orders, data, cfg)
             cost, _, _, valid = eval_solution(assignment, data, cfg)
 
             if valid and cost < best_cost:
@@ -48,28 +38,27 @@ def random_search(data, cfg, n_trials=100):
 
     return best_sol
 
+
 def build_sol(assignment, data, cfg, n_use):
-    """从 assignment 构建解结构"""
     drone_orders = [[] for _ in range(n_use)]
     for j, d in enumerate(assignment):
         if 1 <= d <= n_use:
             drone_orders[d - 1].append(j)
 
-    sol = Solution()
-    sol.routes = []
-    sol.n_enabled = 0
-    sol.total_time = 0
-    sol.total_late = 0
-    total_time = 0
+    sol = type('Solution', (), {
+        'routes': [], 'n_enabled': 0, 'total_energy': 0,
+        'total_late': 0, 'total_swaps': 0, 'total_cost': float('inf')
+    })()
+    total_energy = 0
     total_late = 0
+    total_swaps = 0
 
     for i in range(n_use):
         if not drone_orders[i]:
             continue
         sol.n_enabled += 1
 
-        orders_d = drone_orders[i]
-        orders_d.sort(key=lambda j: data.orders[j].S)
+        orders_d = sorted(drone_orders[i], key=lambda j: data.orders[j].S)
 
         # 选最近起降点
         best_dep_idx = 0
@@ -85,89 +74,103 @@ def build_sol(assignment, data, cfg, n_use):
         drone_dep = data.depots[best_dep_idx]
         depot_idx = data.node_ids.index(drone_dep.id)
 
-        # 趟内逐件顺序处理
+        # === 双层队列 ===
+        unassigned_queue = orders_d[:]
         cur_node = depot_idx
         drone_time = 0
-        trip_load = 0
-        trip_fly = 0
-        trip_late = 0
-        trip_details = []
 
-        for j in orders_d:
-            order = data.orders[j]
+        while unassigned_queue:
+            current_trip_orders = []
+            next_trip_queue = []
+            trip_load = 0
 
-            # 载重检查
-            if trip_load + order.weight > cfg.W_max:
-                d_ret = data.dist[cur_node, depot_idx]
-                t_ret = d_ret / (cfg.v_cruise * 3600)
-                total_time += trip_fly + t_ret
-                total_late += trip_late
-                drone_time += trip_fly + t_ret + cfg.t_swap_min / 60
+            # 贪心装箱
+            for j in unassigned_queue:
+                w = data.orders[j].weight
+                if trip_load + w <= cfg.W_max:
+                    current_trip_orders.append(j)
+                    trip_load += w
+                else:
+                    next_trip_queue.append(j)
 
-                route = Route()
-                route.drone = i + 1
-                route.orders = [d["order_id"] for d in trip_details]
-                route.time = trip_fly + t_ret
-                route.late = trip_late
-                route.cost = cfg.alpha * (trip_fly + t_ret) + cfg.gamma * trip_late
-                route.depot_name = drone_dep.name
-                route.details = trip_details
-                sol.routes.append(route)
+            trip_fly = 0
+            trip_energy = 0
+            trip_late = 0
+            trip_details = []
 
-                cur_node = depot_idx
-                trip_load = 0
-                trip_fly = 0
-                trip_late = 0
-                trip_details = []
+            # 逐单配送
+            for j in current_trip_orders:
+                order = data.orders[j]
+                pk = data.node_ids.index(order.pickup_id)
+                dk = data.node_ids.index(order.delivery_id)
 
-            pk = data.node_ids.index(order.pickup_id)
-            dk = data.node_ids.index(order.delivery_id)
+                d1 = data.dist[cur_node, pk]
+                d2 = data.dist[pk, dk]
+                tf1 = d1 / (cfg.v_cruise * 3600)
+                tf2 = d2 / (cfg.v_cruise * 3600)
+                td = cfg.t_deliver_min / 60
 
-            d1 = data.dist[cur_node, pk]
-            d2 = data.dist[pk, dk]
-            tf1 = d1 / (cfg.v_cruise * 3600)
-            tf2 = d2 / (cfg.v_cruise * 3600)
-            td = cfg.t_deliver_min / 60
+                e_empty = cfg.e0 * d1
+                e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
+                e_segment = e_empty + e_loaded
 
-            depart = max(order.S, drone_time)
-            arrive = depart + tf1 + tf2 + td
-            trip_late_here = max(0, arrive - order.b)
+                # 能耗超限 → 换电
+                if trip_energy + e_segment > cfg.E_max:
+                    total_energy += trip_energy
+                    total_late += trip_late
+                    total_swaps += 1
+                    drone_time += cfg.t_swap_min / 60
+                    trip_energy = 0
+                    trip_late = 0
+                    trip_fly = 0
 
-            drone_time = depart + tf1 + tf2 + td
-            trip_fly += tf1 + tf2 + td
-            trip_load += order.weight
-            trip_late += trip_late_here
-            cur_node = dk
+                    d1 = data.dist[cur_node, pk]
+                    tf1 = d1 / (cfg.v_cruise * 3600)
+                    e_empty = cfg.e0 * d1
+                    e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
+                    e_segment = e_empty + e_loaded
 
-            detail = {
-                "order_id": j + 1,
-                "pickup": order.pickup_name,
-                "delivery": order.delivery_name,
-                "weight": order.weight,
-                "start": drone_dep.name,
-                "arrive_h": arrive,
-                "deadline_h": order.b,
-            }
-            trip_details.append(detail)
+                depart = max(order.S, drone_time)
+                arrive = depart + tf1 + tf2 + td
+                if arrive < order.a:
+                    arrive = order.a
+                trip_late_here = max(0, arrive - order.b)
 
-        # 最后一趟返回
-        d_ret = data.dist[cur_node, depot_idx]
-        t_ret = d_ret / (cfg.v_cruise * 3600)
-        total_time += trip_fly + t_ret
-        total_late += trip_late
+                drone_time = arrive
+                trip_fly += tf1 + tf2 + td
+                trip_energy += e_segment
+                trip_late += trip_late_here
+                cur_node = dk
 
-        route = Route()
-        route.drone = i + 1
-        route.orders = [d["order_id"] for d in trip_details]
-        route.time = trip_fly + t_ret
-        route.late = trip_late
-        route.cost = cfg.alpha * (trip_fly + t_ret) + cfg.gamma * trip_late
-        route.depot_name = drone_dep.name
-        route.details = trip_details
-        sol.routes.append(route)
+                trip_details.append({
+                    "order_id": j + 1, "pickup": order.pickup_name,
+                    "delivery": order.delivery_name, "weight": order.weight,
+                    "start": drone_dep.name, "arrive_h": arrive, "deadline_h": order.b,
+                })
 
-    sol.total_time = total_time
+            # 返程
+            d_ret = data.dist[cur_node, depot_idx]
+            e_ret = cfg.e0 * d_ret
+            t_ret = d_ret / (cfg.v_cruise * 3600)
+            total_energy += trip_energy + e_ret
+            total_late += trip_late
+            drone_time += t_ret + cfg.t_swap_min / 60
+
+            sol.routes.append({
+                'drone': i + 1,
+                'orders': [d['order_id'] for d in trip_details],
+                'energy': trip_energy + e_ret,
+                'late': trip_late,
+                'cost': cfg.alpha * (trip_energy + e_ret) + cfg.gamma * trip_late,
+                'depot_name': drone_dep.name,
+                'details': trip_details,
+            })
+
+            cur_node = depot_idx
+            unassigned_queue = next_trip_queue
+
+    sol.total_energy = total_energy
     sol.total_late = total_late
-    sol.total_cost = sol.n_enabled * cfg.enable_cost + sum(r.cost for r in sol.routes)
-
+    sol.total_swaps = total_swaps
+    sol.total_cost = sol.n_enabled * cfg.enable_cost + cfg.alpha * total_energy + cfg.gamma * total_late + cfg.swap_cost * total_swaps
     return sol
