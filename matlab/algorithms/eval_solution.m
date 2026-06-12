@@ -6,6 +6,8 @@ function [cost, total_energy, total_late, valid] = eval_solution(assignment, dat
 %   3. 电池约束：单趟能耗 > E_max → 触发当前节点换电（加换电成本）
 %   4. 时间窗约束：早于a_j等待，晚于b_j记录超时累积
 
+    eval_counter('inc');
+
     n_drones = cfg.n_drones;
     m = data.n_orders;
 
@@ -47,90 +49,56 @@ function [cost, total_energy, total_late, valid] = eval_solution(assignment, dat
         drone_dep = dep(best_dep_idx);
         depot_idx = find(strcmp(data.node_ids, drone_dep.id));
 
-        % === 双层队列：趟次规划与执行 ===
-        unassigned_queue = orders_d;
+        % === 逐件配送，电量不够就回去换电 ===
         cur_node = depot_idx;
         drone_time = 0;
+        remaining_battery = cfg.E_max;
 
-        while ~isempty(unassigned_queue)
-            current_trip_orders = [];
-            next_trip_queue = [];
-            trip_load = 0;
+        for kk = 1:length(orders_d)
+            j = orders_d(kk);
+            pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
+            dk = find(strcmp(data.node_ids, data.orders(j).delivery_id));
 
-            % 1. 贪心装箱：尝试装满当前这趟
-            for kk = 1:length(unassigned_queue)
-                j = unassigned_queue(kk);
-                w = data.orders(j).weight;
-                if trip_load + w <= cfg.W_max
-                    current_trip_orders(end+1) = j;
-                    trip_load = trip_load + w;
-                else
-                    next_trip_queue(end+1) = j;
-                end
-            end
+            d1 = data.dist(cur_node, pk);
+            d2 = data.dist(pk, dk);
+            tf1 = d1 / (cfg.v_cruise * 3600);
+            tf2 = d2 / (cfg.v_cruise * 3600);
+            td = cfg.t_deliver_min / 60;
 
-            trip_fly = 0;
-            trip_energy = 0;
-            trip_late = 0;
+            e_empty = cfg.e0 * d1;
+            e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
+            e_needed = e_empty + e_loaded;
+            e_return = cfg.e0 * data.dist(dk, depot_idx);
 
-            % 2. 执行本趟订单配送
-            for kk = 1:length(current_trip_orders)
-                j = current_trip_orders(kk);
-                pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
-                dk = find(strcmp(data.node_ids, data.orders(j).delivery_id));
+            % 电量不够（本次+回程）→ 回起降点换电
+            if e_needed + e_return > remaining_battery
+                d_ret = data.dist(cur_node, depot_idx);
+                e_ret = cfg.e0 * d_ret;
+                t_ret = d_ret / (cfg.v_cruise * 3600);
+                total_energy = total_energy + e_ret;
+                drone_time = drone_time + t_ret;
+                total_swaps = total_swaps + 1;
+                drone_time = drone_time + cfg.t_swap_min/60;
+                remaining_battery = cfg.E_max;
+                cur_node = depot_idx;
 
                 d1 = data.dist(cur_node, pk);
-                d2 = data.dist(pk, dk);
                 tf1 = d1 / (cfg.v_cruise * 3600);
-                tf2 = d2 / (cfg.v_cruise * 3600);
-                td = cfg.t_deliver_min / 60;
-
                 e_empty = cfg.e0 * d1;
-                e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
-                e_segment = e_empty + e_loaded;
-
-                % 能耗超限 → 当前节点换电
-                if trip_energy + e_segment > cfg.E_max
-                    total_energy = total_energy + trip_energy;
-                    total_late = total_late + trip_late;
-                    total_swaps = total_swaps + 1;
-                    drone_time = drone_time + cfg.t_swap_min/60;
-                    trip_energy = 0; trip_late = 0; trip_fly = 0;
-
-                    % 重新计算
-                    d1 = data.dist(cur_node, pk);
-                    tf1 = d1 / (cfg.v_cruise * 3600);
-                    e_empty = cfg.e0 * d1;
-                    e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
-                    e_segment = e_empty + e_loaded;
-                end
-
-                % 时间窗
-                depart = max(data.orders(j).S, drone_time);
-                arrive = depart + tf1 + tf2 + td;
-                if arrive < data.orders(j).a, arrive = data.orders(j).a; end
-
-                trip_late_here = max(0, arrive - data.orders(j).b);
-                trip_late = trip_late + trip_late_here;
-
-                drone_time = arrive;
-                trip_fly = trip_fly + tf1 + tf2 + td;
-                trip_energy = trip_energy + e_segment;
-                cur_node = dk;
-                delivered(j) = true;
+                e_needed = e_empty + e_loaded;
             end
 
-            % 3. 一趟结束，返回起降点补电/补货
-            d_ret = data.dist(cur_node, depot_idx);
-            e_ret = cfg.e0 * d_ret;
-            t_ret = d_ret / (cfg.v_cruise * 3600);
+            depart = max(data.orders(j).S, drone_time);
+            arrive = depart + tf1 + tf2 + td;
+            if arrive < data.orders(j).a, arrive = data.orders(j).a; end
 
-            total_energy = total_energy + trip_energy + e_ret;
-            total_late = total_late + trip_late;
-            drone_time = drone_time + t_ret + cfg.t_swap_min/60;
+            total_energy = total_energy + e_needed;
+            remaining_battery = remaining_battery - e_needed;
+            total_late = total_late + max(0, arrive - data.orders(j).b);
 
-            cur_node = depot_idx;
-            unassigned_queue = next_trip_queue;
+            drone_time = arrive;
+            cur_node = dk;
+            delivered(j) = true;
         end
     end
 

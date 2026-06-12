@@ -56,104 +56,57 @@ def eval_solution(assignment, data, cfg):
         drone_dep = data.depots[best_dep_idx]
         depot_idx = data.node_ids.index(drone_dep.id)
 
-        # === 双层队列：趟次规划与执行 ===
-        unassigned_queue = orders_d[:]
+        # === 逐件配送，电量不够就回去换电 ===
         cur_node = depot_idx
         drone_time = 0
+        remaining_battery = cfg.E_max
 
-        while unassigned_queue:
-            current_trip_orders = []
-            next_trip_queue = []
-            trip_load = 0
+        for j in orders_d:
+            order = data.orders[j]
+            pk = data.node_ids.index(order.pickup_id)
+            dk = data.node_ids.index(order.delivery_id)
 
-            # 1. 贪心装箱
-            for j in unassigned_queue:
-                w = data.orders[j].weight
-                if trip_load + w <= cfg.W_max:
-                    current_trip_orders.append(j)
-                    trip_load += w
-                else:
-                    next_trip_queue.append(j)
+            d1 = data.dist[cur_node, pk]
+            d2 = data.dist[pk, dk]
+            tf1 = d1 / (cfg.v_cruise * 3600)
+            tf2 = d2 / (cfg.v_cruise * 3600)
+            td = cfg.t_deliver_min / 60
 
-            trip_fly = 0
-            trip_energy = 0
-            trip_late = 0
+            e_empty = cfg.e0 * d1
+            e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
+            e_needed = e_empty + e_loaded
+            e_return = cfg.e0 * data.dist[dk, depot_idx]  # 送完后回起降点所需能耗
 
-            # 2. Phase 1：依次取货（cur_node → pickup_1 → pickup_2 → ...）
-            cur_load = 0
-            for j in current_trip_orders:
-                order = data.orders[j]
-                pk = data.node_ids.index(order.pickup_id)
+            # 电量不够（本次+回程）→ 回起降点换电
+            if e_needed + e_return > remaining_battery:
+                d_ret = data.dist[cur_node, depot_idx]
+                e_ret = cfg.e0 * d_ret
+                t_ret = d_ret / (cfg.v_cruise * 3600)
+                total_energy += e_ret
+                drone_time += t_ret
+                total_swaps += 1
+                drone_time += cfg.t_swap_min / 60
+                remaining_battery = cfg.E_max
+                cur_node = depot_idx
 
-                d = data.dist[cur_node, pk]
-                e = (cfg.e0 + cfg.e1 * cur_load) * d
-                tf = d / (cfg.v_cruise * 3600)
+                d1 = data.dist[cur_node, pk]
+                tf1 = d1 / (cfg.v_cruise * 3600)
+                e_empty = cfg.e0 * d1
+                e_needed = e_empty + e_loaded
 
-                if trip_energy + e > cfg.E_max:
-                    total_energy += trip_energy
-                    total_late += trip_late
-                    total_swaps += 1
-                    drone_time += cfg.t_swap_min / 60
-                    trip_energy = 0
-                    trip_late = 0
-                    trip_fly = 0
-                    e = (cfg.e0 + cfg.e1 * cur_load) * d
+            # 执行配送
+            depart = max(order.S, drone_time)
+            arrive = depart + tf1 + tf2 + td
+            if arrive < order.a:
+                arrive = order.a
 
-                arrive_pickup = drone_time + tf
-                if arrive_pickup < order.S:
-                    arrive_pickup = order.S
+            total_energy += e_needed
+            remaining_battery -= e_needed
+            total_late += max(0, arrive - order.b)
 
-                drone_time = arrive_pickup
-                trip_fly += tf
-                trip_energy += e
-                cur_load += order.weight
-                cur_node = pk
-
-            # 3. Phase 2：依次配送（... → delivery_1 → delivery_2 → ...）
-            for j in current_trip_orders:
-                order = data.orders[j]
-                dk = data.node_ids.index(order.delivery_id)
-
-                d = data.dist[cur_node, dk]
-                e = (cfg.e0 + cfg.e1 * cur_load) * d
-                tf = d / (cfg.v_cruise * 3600)
-                td = cfg.t_deliver_min / 60
-
-                if trip_energy + e > cfg.E_max:
-                    total_energy += trip_energy
-                    total_late += trip_late
-                    total_swaps += 1
-                    drone_time += cfg.t_swap_min / 60
-                    trip_energy = 0
-                    trip_late = 0
-                    trip_fly = 0
-                    e = (cfg.e0 + cfg.e1 * cur_load) * d
-
-                arrive = drone_time + tf + td
-                if arrive < order.a:
-                    arrive = order.a
-
-                trip_late_here = max(0, arrive - order.b)
-                trip_late += trip_late_here
-
-                drone_time = arrive
-                trip_fly += tf + td
-                trip_energy += e
-                cur_load -= order.weight
-                cur_node = dk
-                delivered.add(j)
-
-            # 4. 一趟结束，返回起降点
-            d_ret = data.dist[cur_node, depot_idx]
-            e_ret = cfg.e0 * d_ret
-            t_ret = d_ret / (cfg.v_cruise * 3600)
-
-            total_energy += trip_energy + e_ret
-            total_late += trip_late
-            drone_time += t_ret + cfg.t_swap_min / 60
-
-            cur_node = depot_idx
-            unassigned_queue = next_trip_queue
+            drone_time = arrive
+            cur_node = dk
+            delivered.add(j)
 
     n_enabled = sum(1 for orders in drone_orders if orders)
 

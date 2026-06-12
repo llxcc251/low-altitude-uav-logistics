@@ -1,27 +1,37 @@
-function sol = genetic_algorithm(data, cfg)
-% GENETIC_ALGORITHM 遗传算法（能耗版，简化稳定版）
+function sol = genetic_algorithm(data, cfg, time_budget)
+% GENETIC_ALGORITHM 遗传算法（固定时间预算版）
 
+    if nargin < 3, time_budget = 20; end
     n_drones = cfg.n_drones;
     m = data.n_orders;
     depot_idx = find(strcmp({data.nodes.type}, 'depot'));
     dep = data.nodes(depot_idx);
 
     pop_size = 100;
-    n_gen = 500;
+    end_time = tic;
+    gen = 0;
 
     % === 初始化：用随机搜索的解 + 智能随机 ===
-    init_sol = random_search(data, cfg, 500);
+    init_sol = random_search(data, cfg, time_budget * 0.2);
     pop = cell(pop_size, 1);
     fitness = inf(pop_size, 1);
 
-    % 第1个：随机搜索最优解
+    if toc(end_time) >= time_budget
+        fprintf('  GA init: timed out\n');
+        sol = init_sol; return;
+    end
+
     pop{1} = sol_to_assignment(init_sol, n_drones, m);
     fitness(1) = calc_cost(pop{1}, data, cfg, dep);
 
-    % 其余：智能随机分配（按重量排序，贪心分配）
     for p = 2:pop_size
+        if toc(end_time) >= time_budget, break; end
         pop{p} = smart_random_assignment(n_drones, m, data, cfg);
         fitness(p) = calc_cost(pop{p}, data, cfg, dep);
+    end
+
+    if isempty(pop{1})
+        sol = init_sol; return;
     end
 
     [best_cost, best_idx] = min(fitness);
@@ -30,7 +40,8 @@ function sol = genetic_algorithm(data, cfg)
     fprintf('  GA init: best_cost=%.1f\n', best_cost);
 
     % === 进化 ===
-    for gen = 1:n_gen
+    while toc(end_time) < time_budget
+        gen = gen + 1;
         new_pop = cell(pop_size, 1);
         new_fit = inf(pop_size, 1);
 
@@ -52,18 +63,17 @@ function sol = genetic_algorithm(data, cfg)
             child = crossover_mutation(p1, p2, n_drones, m);
             cc = calc_cost(child, data, cfg, dep);
 
-            % 贪心替换：比父代差就保留父代
-            if cc < fitness(sort_idx(min(p, length(sort_idx))))
-                new_pop{p} = child;
-                new_fit(p) = cc;
-            else
-                new_pop{p} = p1;
-                new_fit(p) = fitness(sort_idx(min(p, length(sort_idx))));
-            end
+            % 直接添加子代
+            new_pop{p} = child;
+            new_fit(p) = cc;
         end
 
-        pop = new_pop;
-        fitness = new_fit;
+        % (u+lambda) 合并父代+子代，取前 pop_size
+        combined_pop = [pop; new_pop];
+        combined_fit = [fitness; new_fit];
+        [~, sort_idx] = sort(combined_fit);
+        pop = combined_pop(sort_idx(1:pop_size));
+        fitness = combined_fit(sort_idx(1:pop_size));
 
         [gen_best, gen_best_idx] = min(fitness);
         if gen_best < best_cost
@@ -72,7 +82,7 @@ function sol = genetic_algorithm(data, cfg)
         end
     end
 
-    fprintf('  GA final: best_cost=%.1f\n', best_cost);
+    fprintf('  GA final: best_cost=%.1f (%d gen)\n', best_cost, gen);
     sol = assignment_to_sol(best, data, cfg, dep);
 end
 
@@ -100,25 +110,9 @@ function child = crossover_mutation(p1, p2, n_drones, m)
     end
 end
 
-function assignment = smart_random_assignment(n_drones, m, data, cfg)
-    % 按重量排序后贪心分配
-    assignment = zeros(1, m);
-    weights = [data.orders.weight];
-    [~, weight_order] = sort(weights, 'descend');
-    drone_load = zeros(1, n_drones);
-
-    for k = 1:m
-        j = weight_order(k);
-        w = data.orders(j).weight;
-        candidates = find(drone_load + w <= cfg.W_max);
-        if ~isempty(candidates)
-            d = candidates(randi(length(candidates)));
-            assignment(j) = d;
-            drone_load(d) = drone_load(d) + w;
-        else
-            assignment(j) = randi(n_drones);
-        end
-    end
+function assignment = smart_random_assignment(n_drones, m, ~, ~)
+    % 纯随机分配（取一送一模式下无需载重约束）
+    assignment = randi(n_drones, 1, m);
 end
 
 function assignment = sol_to_assignment(sol, n_drones, m)
@@ -171,104 +165,101 @@ function sol = assignment_to_sol(assignment, data, cfg, dep)
         drone_dep = dep(best_dep_idx);
         depot_idx = find(strcmp(data.node_ids, drone_dep.id));
 
-        % === 双层队列逻辑开始 ===
-        unassigned_queue = orders_d;
+        % === 逐件配送，电量不够就回去换电 ===
         cur_node = depot_idx;
         drone_time = 0;
+        remaining_battery = cfg.E_max;
+        trip_energy_acc = 0;
+        trip_late_acc = 0;
+        trip_details = {};
 
-        while ~isempty(unassigned_queue)
-            current_trip_orders = [];
-            next_trip_queue = [];
-            trip_load = 0;
+        for j_idx = 1:length(orders_d)
+            j = orders_d(j_idx);
+            pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
+            dk = find(strcmp(data.node_ids, data.orders(j).delivery_id));
 
-            % 贪心装箱
-            for kk = 1:length(unassigned_queue)
-                j = unassigned_queue(kk);
-                w = data.orders(j).weight;
-                if trip_load + w <= cfg.W_max
-                    current_trip_orders(end+1) = j;
-                    trip_load = trip_load + w;
-                else
-                    next_trip_queue(end+1) = j;
+            d1 = data.dist(cur_node, pk); d2 = data.dist(pk, dk);
+            tf1 = d1/(cfg.v_cruise*3600); tf2 = d2/(cfg.v_cruise*3600);
+            td = cfg.t_deliver_min/60;
+
+            e_empty = cfg.e0 * d1;
+            e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
+            e_needed = e_empty + e_loaded;
+            e_return = cfg.e0 * data.dist(dk, depot_idx);
+
+            % 电量不够（本次+回程）→ 回起降点换电
+            if e_needed + e_return > remaining_battery
+                d_ret = data.dist(cur_node, depot_idx);
+                e_ret = cfg.e0 * d_ret;
+                t_ret = d_ret/(cfg.v_cruise*3600);
+
+                if ~isempty(trip_details)
+                    total_energy = total_energy + trip_energy_acc + e_ret;
+                    total_late = total_late + trip_late_acc;
+                    drone_time = drone_time + t_ret;
+
+                    route.drone = i;
+                    route.orders = cellfun(@(d) d.order_id, trip_details);
+                    route.energy = trip_energy_acc + e_ret;
+                    route.late = trip_late_acc;
+                    route.cost = cfg.alpha*(trip_energy_acc+e_ret) + cfg.gamma*trip_late_acc;
+                    route.depot_name = drone_dep.name;
+                    route.details = trip_details;
+                    sol.routes{end+1} = route;
                 end
-            end
 
-            trip_fly = 0; trip_energy = 0; trip_late = 0;
-            trip_details = {};
+                total_swaps = total_swaps + 1;
+                drone_time = drone_time + cfg.t_swap_min/60;
+                remaining_battery = cfg.E_max;
+                cur_node = depot_idx;
+                trip_energy_acc = 0;
+                trip_late_acc = 0;
+                trip_details = {};
 
-            % 逐单配送
-            for kk = 1:length(current_trip_orders)
-                j = current_trip_orders(kk);
-                pk = find(strcmp(data.node_ids, data.orders(j).pickup_id));
-                dk = find(strcmp(data.node_ids, data.orders(j).delivery_id));
-
-                d1 = data.dist(cur_node, pk); d2 = data.dist(pk, dk);
-                tf1 = d1/(cfg.v_cruise*3600); tf2 = d2/(cfg.v_cruise*3600);
-                td = cfg.t_deliver_min/60;
-
+                d1 = data.dist(cur_node, pk);
+                tf1 = d1/(cfg.v_cruise*3600);
                 e_empty = cfg.e0 * d1;
-                e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
-                e_segment = e_empty + e_loaded;
-
-                % 能耗超限换电
-                if trip_energy + e_segment > cfg.E_max
-                    total_energy = total_energy + trip_energy;
-                    total_late = total_late + trip_late;
-                    total_swaps = total_swaps + 1;
-                    drone_time = drone_time + cfg.t_swap_min/60;
-                    trip_energy = 0; trip_late = 0; trip_fly = 0;
-
-                    d1 = data.dist(cur_node, pk);
-                    tf1 = d1/(cfg.v_cruise*3600);
-                    e_empty = cfg.e0 * d1;
-                    e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
-                    e_segment = e_empty + e_loaded;
-                end
-
-                depart = max(data.orders(j).S, drone_time);
-                arrive = depart + tf1 + tf2 + td;
-                if arrive < data.orders(j).a, arrive = data.orders(j).a; end
-                trip_late_here = max(0, arrive - data.orders(j).b);
-
-                drone_time = arrive;
-                trip_fly = trip_fly + tf1 + tf2 + td;
-                trip_energy = trip_energy + e_segment;
-                trip_late = trip_late + trip_late_here;
-                cur_node = dk;
-
-                % 记录详情
-                detail.order_id = j;
-                detail.pickup = data.orders(j).pickup_name;
-                detail.delivery = data.orders(j).delivery_name;
-                detail.weight = data.orders(j).weight;
-                detail.start = drone_dep.name;
-                detail.arrive_h = arrive;
-                detail.deadline_h = data.orders(j).b;
-                trip_details{end+1} = detail;
+                e_needed = e_empty + e_loaded;
             end
 
-            % 返程结算（本趟结束）
+            depart = max(data.orders(j).S, drone_time);
+            arrive = depart + tf1 + tf2 + td;
+            if arrive < data.orders(j).a, arrive = data.orders(j).a; end
+            trip_late_here = max(0, arrive - data.orders(j).b);
+
+            trip_energy_acc = trip_energy_acc + e_needed;
+            remaining_battery = remaining_battery - e_needed;
+            trip_late_acc = trip_late_acc + trip_late_here;
+            drone_time = arrive;
+            cur_node = dk;
+
+            detail.order_id = j;
+            detail.pickup = data.orders(j).pickup_name;
+            detail.delivery = data.orders(j).delivery_name;
+            detail.weight = data.orders(j).weight;
+            detail.start = drone_dep.name;
+            detail.arrive_h = arrive;
+            detail.deadline_h = data.orders(j).b;
+            trip_details{end+1} = detail;
+        end
+
+        % 最后一趟结清
+        if ~isempty(trip_details)
             d_ret = data.dist(cur_node, depot_idx);
             e_ret = cfg.e0 * d_ret;
             t_ret = d_ret/(cfg.v_cruise*3600);
-            total_energy = total_energy + trip_energy + e_ret;
-            total_late = total_late + trip_late;
+            total_energy = total_energy + trip_energy_acc + e_ret;
+            total_late = total_late + trip_late_acc;
             drone_time = drone_time + t_ret + cfg.t_swap_min/60;
 
-            % 将本趟写入总路线
             route.drone = i;
             route.orders = cellfun(@(d) d.order_id, trip_details);
-            route.trips = {cellfun(@(d) d.order_id, trip_details)};
-            route.energy = trip_energy + e_ret;
-            route.late = trip_late;
-            route.cost = cfg.alpha*(trip_energy+e_ret) + cfg.gamma*trip_late;
+            route.energy = trip_energy_acc + e_ret;
+            route.late = trip_late_acc;
+            route.cost = cfg.alpha*(trip_energy_acc+e_ret) + cfg.gamma*trip_late_acc;
             route.depot_name = drone_dep.name;
             route.details = trip_details;
             sol.routes{end+1} = route;
-
-            % 准备下一趟
-            cur_node = depot_idx;
-            unassigned_queue = next_trip_queue;
         end
     end
     sol.total_energy = total_energy;

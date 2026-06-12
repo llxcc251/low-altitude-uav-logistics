@@ -1,55 +1,30 @@
 # Changelog
 
-## 2026-06-12：改配送路径为批量取-批量送
+## 2026-06-12：改为按电量判断换电，去掉装箱逻辑
 
-**问题**：原逻辑为"取一送一"——每件货独立执行 `cur_node → pickup_j → delivery_j`，趟次装箱的 `trip_load` 仅用于载重分组，飞行时机上最多只有 1 件货，能耗和路径均不真实。
+**问题**：原逻辑每趟结束强制换电（5min），且用 `W_max` 装箱划分趟次。取一送一模式下载重约束无意义，且大量趟次耗电不到 50% 也白等换电时间。
 
-**修复**：拆分为两个阶段执行：
-- Phase 1：`depot → pickup_1 → pickup_2 → ...`，取货段 `cur_load` 逐件累加
-- Phase 2：`... → delivery_1 → delivery_2 → ...`，配送段 `cur_load` 逐件递减
-- 取货时等待 `order.S`（就绪时间），配送时等待 `order.a`（时间窗开始）
+**改动**：
 
-| 文件 | 改动 |
-|------|------|
-| `python/eval_solution.py` | 将单 for 循环拆为 Phase1 取货 + Phase2 配送两段；能耗按实时 `cur_load` 计算 |
+1. **去掉装箱逻辑**——不再用 `W_max` 分组，每件订单独立配送
+2. **跟踪每架无人机剩余电量**——`remaining_battery` 初始 1000 Wh，每次执行订单后递减
+3. **按电量判断换电**——如果当前订单能耗 + 回程能耗 > 剩余电量，才回起降点换电
+4. **保障回程**——判断条件包含飞回起降点的能耗预留
 
----
+**涉及文件**：Python 和 MATLAB 的 `eval_solution`、`build_sol`/`assignment_to_sol`（`random_search`、`genetic_algorithm`）共 6 个文件。
+
+## 2026-06-12：修复 GA 替换准则 + smart_random_assignment
+
+**P0-1 GA 替换准则错配**：
+- 原代码子代 fitness 与上一代错位索引比较，进化压力近乎随机
+- 改为标准 `(μ+λ)` 选择：合并父代和子代，按 fitness 排序取前 pop_size
+
+**P0-3 smart_random_assignment 载重错误**：
+- `drone_load + w ≤ W_max` 错误限制了一架无人机累计总载重 ≤2.5 kg
+- 改为纯随机分配（取一送一模式下载重约束不适用于分配阶段）
+
+**文件**：Python 和 MATLAB 的 `genetic_algorithm.py/m`、`random_search.py/m`
 
 ## 2026-06-12：公平对比改造
 
-**改动**：所有算法改为固定时间预算，而非固定迭代次数，确保比较公平。
-
-| 文件 | 改动 |
-|------|------|
-| `random_search.py` | 参数 `n_trials=500` → `time_budget=20`；嵌套循环改为 while 超时循环 |
-| `genetic_algorithm.py` | 去掉 `n_gen=500`，改为 `time_budget=20`；`end_time` 在初始化前设定 |
-| `eval_solution.py` | 新增 `EVAL_COUNT` 计数器 + `reset_eval_count()` / `get_eval_count()` |
-| `run_all.py` | 统一传 `time_budget`；对比表新增"评估次数"列 |
-
----
-
-## 2026-06-12：修 P0-1 能耗载重未递减
-
-**问题**：`e_loaded = (e0 + e1 × trip_load) × d2`，`trip_load` 是整趟总载重且不递减。"取一送一"模式下每段实载只有当前订单重量，高估能耗。
-
-**修复**：`trip_load` → `order.weight`
-
-| 文件 | 改动 |
-|------|------|
-| `python/eval_solution.py` | `trip_load` → `order.weight`（2 处） |
-| `python/random_search.py` | `trip_load` → `order.weight`（2 处） |
-| `matlab/eval_solution.m` | `trip_load` → `data.orders(j).weight`（2 处） |
-| `matlab/genetic_algorithm.m` | `trip_load` → `data.orders(j).weight`（2 处） |
-| `matlab/random_search.m` | `trip_load` → `data.orders(j).weight`（2 处） |
-
----
-
-## 2026-06-12：修打印错误（8 架 → 20 架）
-
-**问题**：`load_data.py` 的 print 写死了 `8 架无人机`，实际数据是 20 架。
-
-**修复**：从 `orders.json` 的 `drone_count` 字段读取真实数量。
-
-| 文件 | 改动 |
-|------|------|
-| `python/load_data.py` | 读取 `raw_order["drone_count"]` 存入 `data.n_drones_data`；print 改为变量输出 |
+所有算法改为固定时间预算（默认 20s），新增评估计数器。MATLAB 同步对齐。

@@ -62,15 +62,15 @@ def genetic_algorithm(data, cfg, time_budget=20):
             child = crossover_mutation(p1, p2, n_drones, m)
             cc = calc_cost(child, data, cfg)
 
-            if cc < fitness[sorted_idx[min(p, len(sorted_idx) - 1)]]:
-                new_pop.append(child)
-                new_fit.append(cc)
-            else:
-                new_pop.append(p1[:])
-                new_fit.append(fitness[sorted_idx[min(p, len(sorted_idx) - 1)]])
+            new_pop.append(child)
+            new_fit.append(cc)
 
-        pop = new_pop
-        fitness = new_fit
+        # (u+lambda) 合并父代+子代，取前 pop_size
+        combined_pop = pop + new_pop
+        combined_fit = fitness + new_fit
+        combined_idx = sorted(range(len(combined_pop)), key=lambda i: combined_fit[i])
+        pop = [combined_pop[i] for i in combined_idx[:pop_size]]
+        fitness = [combined_fit[i] for i in combined_idx[:pop_size]]
 
         gen_best = min(fitness)
         if gen_best < best_cost:

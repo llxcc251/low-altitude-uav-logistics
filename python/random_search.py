@@ -6,22 +6,8 @@ from eval_solution import eval_solution
 
 
 def smart_random_assignment(n_drones, n_orders, data, cfg):
-    """智能随机分配：按重量排序，贪心分配"""
-    assignment = [0] * n_orders
-    weights = [data.orders[j].weight for j in range(n_orders)]
-    weight_order = sorted(range(n_orders), key=lambda j: -weights[j])
-    drone_load = [0.0] * n_drones
-
-    for j in weight_order:
-        w = data.orders[j].weight
-        candidates = [d for d in range(n_drones) if drone_load[d] + w <= cfg.W_max]
-        if candidates:
-            d = random.choice(candidates)
-            assignment[j] = d + 1
-            drone_load[d] += w
-        else:
-            assignment[j] = random.randint(1, n_drones)
-    return assignment
+    """纯随机分配（取一送一模式下无需载重约束）"""
+    return [random.randint(1, n_drones) for _ in range(n_orders)]
 
 
 def random_search(data, cfg, time_budget=20):
@@ -78,100 +64,103 @@ def build_sol(assignment, data, cfg, n_use):
         drone_dep = data.depots[best_dep_idx]
         depot_idx = data.node_ids.index(drone_dep.id)
 
-        # === 双层队列 ===
-        unassigned_queue = orders_d[:]
+        # === 逐件配送，电量不够就回去换电 ===
         cur_node = depot_idx
         drone_time = 0
+        remaining_battery = cfg.E_max
+        trip_orders = []
+        trip_energy_acc = 0
+        trip_late_acc = 0
+        trip_details = []
 
-        while unassigned_queue:
-            current_trip_orders = []
-            next_trip_queue = []
-            trip_load = 0
+        for idx, j in enumerate(orders_d):
+            order = data.orders[j]
+            pk = data.node_ids.index(order.pickup_id)
+            dk = data.node_ids.index(order.delivery_id)
 
-            # 贪心装箱
-            for j in unassigned_queue:
-                w = data.orders[j].weight
-                if trip_load + w <= cfg.W_max:
-                    current_trip_orders.append(j)
-                    trip_load += w
-                else:
-                    next_trip_queue.append(j)
+            d1 = data.dist[cur_node, pk]
+            d2 = data.dist[pk, dk]
+            tf1 = d1 / (cfg.v_cruise * 3600)
+            tf2 = d2 / (cfg.v_cruise * 3600)
+            td = cfg.t_deliver_min / 60
 
-            trip_fly = 0
-            trip_energy = 0
-            trip_late = 0
-            trip_details = []
+            e_empty = cfg.e0 * d1
+            e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
+            e_needed = e_empty + e_loaded
+            e_return = cfg.e0 * data.dist[dk, depot_idx]
 
-            # 逐单配送
-            for j in current_trip_orders:
-                order = data.orders[j]
-                pk = data.node_ids.index(order.pickup_id)
-                dk = data.node_ids.index(order.delivery_id)
+            # 电量不够（本次+回程）→ 回起降点换电
+            if e_needed + e_return > remaining_battery:
+                d_ret = data.dist[cur_node, depot_idx]
+                e_ret = cfg.e0 * d_ret
+                t_ret = d_ret / (cfg.v_cruise * 3600)
+
+                # 结清当前这趟（如有）
+                if trip_details:
+                    total_energy += trip_energy_acc + e_ret
+                    total_late += trip_late_acc
+                    drone_time += t_ret
+                    sol.routes.append({
+                        'drone': i + 1,
+                        'orders': [t['order_id'] for t in trip_details],
+                        'energy': trip_energy_acc + e_ret,
+                        'late': trip_late_acc,
+                        'cost': cfg.alpha * (trip_energy_acc + e_ret) + cfg.gamma * trip_late_acc,
+                        'depot_name': drone_dep.name,
+                        'details': trip_details,
+                    })
+
+                total_swaps += 1
+                drone_time += cfg.t_swap_min / 60
+                remaining_battery = cfg.E_max
+                cur_node = depot_idx
+                trip_orders = []
+                trip_energy_acc = 0
+                trip_late_acc = 0
+                trip_details = []
 
                 d1 = data.dist[cur_node, pk]
-                d2 = data.dist[pk, dk]
                 tf1 = d1 / (cfg.v_cruise * 3600)
-                tf2 = d2 / (cfg.v_cruise * 3600)
-                td = cfg.t_deliver_min / 60
-
                 e_empty = cfg.e0 * d1
-                e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
-                e_segment = e_empty + e_loaded
+                e_needed = e_empty + e_loaded
 
-                # 能耗超限 → 换电
-                if trip_energy + e_segment > cfg.E_max:
-                    total_energy += trip_energy
-                    total_late += trip_late
-                    total_swaps += 1
-                    drone_time += cfg.t_swap_min / 60
-                    trip_energy = 0
-                    trip_late = 0
-                    trip_fly = 0
+            # 执行配送
+            depart = max(order.S, drone_time)
+            arrive = depart + tf1 + tf2 + td
+            if arrive < order.a:
+                arrive = order.a
 
-                    d1 = data.dist[cur_node, pk]
-                    tf1 = d1 / (cfg.v_cruise * 3600)
-                    e_empty = cfg.e0 * d1
-                    e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
-                    e_segment = e_empty + e_loaded
+            trip_energy_acc += e_needed
+            remaining_battery -= e_needed
+            trip_late_acc += max(0, arrive - order.b)
+            drone_time = arrive
+            cur_node = dk
 
-                depart = max(order.S, drone_time)
-                arrive = depart + tf1 + tf2 + td
-                if arrive < order.a:
-                    arrive = order.a
-                trip_late_here = max(0, arrive - order.b)
+            trip_details.append({
+                "order_id": j + 1, "pickup": order.pickup_name,
+                "delivery": order.delivery_name, "weight": order.weight,
+                "start": drone_dep.name, "arrive_h": arrive, "deadline_h": order.b,
+            })
 
-                drone_time = arrive
-                trip_fly += tf1 + tf2 + td
-                trip_energy += e_segment
-                trip_late += trip_late_here
-                cur_node = dk
-
-                trip_details.append({
-                    "order_id": j + 1, "pickup": order.pickup_name,
-                    "delivery": order.delivery_name, "weight": order.weight,
-                    "start": drone_dep.name, "arrive_h": arrive, "deadline_h": order.b,
-                })
-
-            # 返程
+        # 最后一趟结清
+        if trip_energy_acc > 0:
             d_ret = data.dist[cur_node, depot_idx]
             e_ret = cfg.e0 * d_ret
             t_ret = d_ret / (cfg.v_cruise * 3600)
-            total_energy += trip_energy + e_ret
-            total_late += trip_late
+
+            total_energy += trip_energy_acc + e_ret
+            total_late += trip_late_acc
             drone_time += t_ret + cfg.t_swap_min / 60
 
             sol.routes.append({
                 'drone': i + 1,
-                'orders': [d['order_id'] for d in trip_details],
-                'energy': trip_energy + e_ret,
-                'late': trip_late,
-                'cost': cfg.alpha * (trip_energy + e_ret) + cfg.gamma * trip_late,
+                'orders': [t['order_id'] for t in trip_details],
+                'energy': trip_energy_acc + e_ret,
+                'late': trip_late_acc,
+                'cost': cfg.alpha * (trip_energy_acc + e_ret) + cfg.gamma * trip_late_acc,
                 'depot_name': drone_dep.name,
                 'details': trip_details,
             })
-
-            cur_node = depot_idx
-            unassigned_queue = next_trip_queue
 
     sol.total_energy = total_energy
     sol.total_late = total_late
