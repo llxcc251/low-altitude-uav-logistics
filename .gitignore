@@ -7,6 +7,10 @@ build/
 .venv/
 venv/
 
+# Node / frontend
+node_modules/
+*.log
+
 # IDE
 .vscode/
 .idea/

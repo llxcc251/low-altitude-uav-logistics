@@ -1,0 +1,19 @@
+{
+  "name": "sysu-uav-logistics-slidev",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "slidev --remote=false --port 3030 slides.md",
+    "dev:lan": "slidev --remote --port 3030 slides.md",
+    "build": "slidev build slides.md --out dist --base ./ --router-mode hash",
+    "export:pdf": "slidev export slides.md --output dist/期末最终汇报Slidev.pdf --wait 1500",
+    "export:pptx": "slidev export slides.md --format pptx --output dist/期末最终汇报Slidev.pptx --wait 1500"
+  },
+  "dependencies": {
+    "@slidev/theme-default": "^0.25.0"
+  },
+  "devDependencies": {
+    "@slidev/cli": "^52.16.0",
+    "playwright": "^1.60.0"
+  }
+}
