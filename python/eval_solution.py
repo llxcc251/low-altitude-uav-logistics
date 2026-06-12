@@ -1,5 +1,15 @@
 # eval_solution.py - 统一严格评估函数（队列装箱版）
 
+EVAL_COUNT = 0
+
+def reset_eval_count():
+    global EVAL_COUNT
+    EVAL_COUNT = 0
+
+def get_eval_count():
+    global EVAL_COUNT
+    return EVAL_COUNT
+
 def eval_solution(assignment, data, cfg):
     """
     统一评估函数（双层队列装箱）
@@ -10,6 +20,9 @@ def eval_solution(assignment, data, cfg):
     """
     n_drones = cfg.n_drones
     m = data.n_orders
+
+    global EVAL_COUNT
+    EVAL_COUNT += 1
 
     if any(d <= 0 or d > n_drones for d in assignment):
         return 1e9, 0, 0, False
@@ -66,24 +79,17 @@ def eval_solution(assignment, data, cfg):
             trip_energy = 0
             trip_late = 0
 
-            # 2. 执行本趟订单配送
+            # 2. Phase 1：依次取货（cur_node → pickup_1 → pickup_2 → ...）
+            cur_load = 0
             for j in current_trip_orders:
                 order = data.orders[j]
                 pk = data.node_ids.index(order.pickup_id)
-                dk = data.node_ids.index(order.delivery_id)
 
-                d1 = data.dist[cur_node, pk]
-                d2 = data.dist[pk, dk]
-                tf1 = d1 / (cfg.v_cruise * 3600)
-                tf2 = d2 / (cfg.v_cruise * 3600)
-                td = cfg.t_deliver_min / 60
+                d = data.dist[cur_node, pk]
+                e = (cfg.e0 + cfg.e1 * cur_load) * d
+                tf = d / (cfg.v_cruise * 3600)
 
-                e_empty = cfg.e0 * d1
-                e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
-                e_segment = e_empty + e_loaded
-
-                # 能耗超限 → 当前节点换电
-                if trip_energy + e_segment > cfg.E_max:
+                if trip_energy + e > cfg.E_max:
                     total_energy += trip_energy
                     total_late += trip_late
                     total_swaps += 1
@@ -91,16 +97,39 @@ def eval_solution(assignment, data, cfg):
                     trip_energy = 0
                     trip_late = 0
                     trip_fly = 0
+                    e = (cfg.e0 + cfg.e1 * cur_load) * d
 
-                    d1 = data.dist[cur_node, pk]
-                    tf1 = d1 / (cfg.v_cruise * 3600)
-                    e_empty = cfg.e0 * d1
-                    e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
-                    e_segment = e_empty + e_loaded
+                arrive_pickup = drone_time + tf
+                if arrive_pickup < order.S:
+                    arrive_pickup = order.S
 
-                # 时间窗
-                depart = max(order.S, drone_time)
-                arrive = depart + tf1 + tf2 + td
+                drone_time = arrive_pickup
+                trip_fly += tf
+                trip_energy += e
+                cur_load += order.weight
+                cur_node = pk
+
+            # 3. Phase 2：依次配送（... → delivery_1 → delivery_2 → ...）
+            for j in current_trip_orders:
+                order = data.orders[j]
+                dk = data.node_ids.index(order.delivery_id)
+
+                d = data.dist[cur_node, dk]
+                e = (cfg.e0 + cfg.e1 * cur_load) * d
+                tf = d / (cfg.v_cruise * 3600)
+                td = cfg.t_deliver_min / 60
+
+                if trip_energy + e > cfg.E_max:
+                    total_energy += trip_energy
+                    total_late += trip_late
+                    total_swaps += 1
+                    drone_time += cfg.t_swap_min / 60
+                    trip_energy = 0
+                    trip_late = 0
+                    trip_fly = 0
+                    e = (cfg.e0 + cfg.e1 * cur_load) * d
+
+                arrive = drone_time + tf + td
                 if arrive < order.a:
                     arrive = order.a
 
@@ -108,12 +137,13 @@ def eval_solution(assignment, data, cfg):
                 trip_late += trip_late_here
 
                 drone_time = arrive
-                trip_fly += tf1 + tf2 + td
-                trip_energy += e_segment
+                trip_fly += tf + td
+                trip_energy += e
+                cur_load -= order.weight
                 cur_node = dk
                 delivered.add(j)
 
-            # 3. 一趟结束，返回起降点
+            # 4. 一趟结束，返回起降点
             d_ret = data.dist[cur_node, depot_idx]
             e_ret = cfg.e0 * d_ret
             t_ret = d_ret / (cfg.v_cruise * 3600)

@@ -1,6 +1,7 @@
 # genetic_algorithm.py - 遗传算法（队列装箱版）
 
 import random
+import time
 from eval_solution import eval_solution
 from random_search import smart_random_assignment, build_sol
 
@@ -10,33 +11,42 @@ def calc_cost(assignment, data, cfg):
     return cost
 
 
-def genetic_algorithm(data, cfg):
+def genetic_algorithm(data, cfg, time_budget=20):
     n_drones = cfg.n_drones
     m = data.n_orders
 
     pop_size = 100
-    n_gen = 500
+    end_time = time.time() + time_budget
+    gen = 0
 
-    # 初始化
+    # 初始化：用随机搜索的解 + 随机填充
     from random_search import random_search
-    init_sol = random_search(data, cfg, 500)
+    init_sol = random_search(data, cfg, time_budget * 0.2)
     pop = []
     fitness = []
 
-    # 第1个：随机搜索最优解
+    if time.time() >= end_time:
+        print(f'  GA init: timed out, returning random search result')
+        return init_sol
+
     pop.append(sol_to_assignment(init_sol, n_drones, m))
     fitness.append(calc_cost(pop[0], data, cfg))
 
-    # 其余：智能随机
     for p in range(1, pop_size):
+        if time.time() >= end_time:
+            break
         pop.append(smart_random_assignment(n_drones, m, data, cfg))
         fitness.append(calc_cost(pop[p], data, cfg))
 
+    if not pop:
+        return init_sol
+
     best_cost = min(fitness)
     best = pop[fitness.index(best_cost)]
-    print(f'  GA init: best_cost={best_cost:.1f}')
+    print(f'  GA init: best_cost={best_cost:.1f} ({len(pop)} individuals)')
 
-    for gen in range(1, n_gen + 1):
+    while time.time() < end_time:
+        gen += 1
         new_pop = []
         new_fit = []
 
@@ -67,7 +77,7 @@ def genetic_algorithm(data, cfg):
             best = pop[fitness.index(gen_best)][:]
             best_cost = gen_best
 
-    print(f'  GA final: best_cost={best_cost:.1f}')
+    print(f'  GA final: best_cost={best_cost:.1f} ({gen} gen)')
     return build_sol(best, data, cfg, n_drones)
 
 

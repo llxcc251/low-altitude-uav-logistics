@@ -51,6 +51,7 @@ def load_data(data_dir):
         raw_order = json.load(f)
 
     data.n_orders = len(raw_order["orders"])
+    data.n_drones_data = raw_order.get("drone_count", 0)
     data.orders = []
     for o in raw_order["orders"]:
         data.orders.append(Order(
@@ -87,5 +88,5 @@ def load_data(data_dir):
                 data.dist[u, v] = np.sqrt(dx**2 + dy**2)
         print("距离矩阵: 使用直线距离（未找到 distance_matrix.csv）")
 
-    print(f"数据加载完成: 8 架无人机, {data.n_orders} 件快递, {N} 个节点")
+    print(f"数据加载完成: {data.n_drones_data} 架无人机, {data.n_orders} 件快递, {N} 个节点")
     return data

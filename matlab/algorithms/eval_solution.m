@@ -86,7 +86,7 @@ function [cost, total_energy, total_late, valid] = eval_solution(assignment, dat
                 td = cfg.t_deliver_min / 60;
 
                 e_empty = cfg.e0 * d1;
-                e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2;
+                e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
                 e_segment = e_empty + e_loaded;
 
                 % 能耗超限 → 当前节点换电
@@ -101,7 +101,7 @@ function [cost, total_energy, total_late, valid] = eval_solution(assignment, dat
                     d1 = data.dist(cur_node, pk);
                     tf1 = d1 / (cfg.v_cruise * 3600);
                     e_empty = cfg.e0 * d1;
-                    e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2;
+                    e_loaded = (cfg.e0 + cfg.e1 * data.orders(j).weight) * d2;
                     e_segment = e_empty + e_loaded;
                 end
 

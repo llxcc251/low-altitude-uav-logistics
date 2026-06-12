@@ -1,6 +1,7 @@
 # random_search.py - 随机搜索算法（队列装箱版）
 
 import random
+import time
 from eval_solution import eval_solution
 
 
@@ -23,18 +24,21 @@ def smart_random_assignment(n_drones, n_orders, data, cfg):
     return assignment
 
 
-def random_search(data, cfg, n_trials=500):
+def random_search(data, cfg, time_budget=20):
     best_cost = float('inf')
     best_sol = None
+    end_time = time.time() + time_budget
+    n_use = 1
 
-    for n_use in range(1, cfg.n_drones + 1):
-        for trial in range(n_trials):
-            assignment = smart_random_assignment(n_use, data.n_orders, data, cfg)
-            cost, _, _, valid = eval_solution(assignment, data, cfg)
+    while time.time() < end_time:
+        assignment = smart_random_assignment(n_use, data.n_orders, data, cfg)
+        cost, _, _, valid = eval_solution(assignment, data, cfg)
 
-            if valid and cost < best_cost:
-                best_cost = cost
-                best_sol = build_sol(assignment, data, cfg, n_use)
+        if valid and cost < best_cost:
+            best_cost = cost
+            best_sol = build_sol(assignment, data, cfg, n_use)
+
+        n_use = (n_use % cfg.n_drones) + 1
 
     return best_sol
 
@@ -111,7 +115,7 @@ def build_sol(assignment, data, cfg, n_use):
                 td = cfg.t_deliver_min / 60
 
                 e_empty = cfg.e0 * d1
-                e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
+                e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
                 e_segment = e_empty + e_loaded
 
                 # 能耗超限 → 换电
@@ -127,7 +131,7 @@ def build_sol(assignment, data, cfg, n_use):
                     d1 = data.dist[cur_node, pk]
                     tf1 = d1 / (cfg.v_cruise * 3600)
                     e_empty = cfg.e0 * d1
-                    e_loaded = (cfg.e0 + cfg.e1 * trip_load) * d2
+                    e_loaded = (cfg.e0 + cfg.e1 * order.weight) * d2
                     e_segment = e_empty + e_loaded
 
                 depart = max(order.S, drone_time)

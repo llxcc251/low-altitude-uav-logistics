@@ -3,13 +3,14 @@
 import time
 from config import Config
 from load_data import load_data
+from eval_solution import reset_eval_count, get_eval_count
 from random_search import random_search
 from genetic_algorithm import genetic_algorithm
 
-def run_all():
-    """跑全部算法并输出对比表"""
+def run_all(time_budget=20):
+    """跑全部算法并输出对比表（固定时间预算）"""
     print("=" * 50)
-    print("  算法对比实验")
+    print("  算法对比实验（固定时间预算）")
     print("=" * 50)
     print()
 
@@ -18,31 +19,36 @@ def run_all():
     data = load_data("../data")
 
     print(f"数据: {cfg.n_drones} 架无人机, {data.n_orders} 件快递")
+    print(f"时间预算: 每种算法 {time_budget}s")
     print(f"能耗: e0={cfg.e0}, e1={cfg.e1}, E_max={cfg.E_max}Wh")
     print(f"费用: 启用={cfg.enable_cost}, 能耗={cfg.alpha}, 超时={cfg.gamma}")
     print()
 
     methods = [
-        ("random_search", "随机×500/架"),
+        ("random_search", "随机搜索"),
         ("genetic_algorithm", "遗传算法"),
     ]
 
     results = []
     times = []
+    eval_counts = []
 
     for method_key, method_name in methods:
         print(f"运行 {method_name} ...")
+        reset_eval_count()
         start = time.time()
 
         if method_key == "random_search":
-            sol = random_search(data, cfg, 500)
+            sol = random_search(data, cfg, time_budget)
         elif method_key == "genetic_algorithm":
-            sol = genetic_algorithm(data, cfg)
+            sol = genetic_algorithm(data, cfg, time_budget)
 
         elapsed = time.time() - start
-        print(f"  完成 ({elapsed:.2f} s)")
+        n_evals = get_eval_count()
+        print(f"  完成 ({elapsed:.2f} s, {n_evals} 次评估)")
         results.append(sol)
         times.append(elapsed)
+        eval_counts.append(n_evals)
 
     # 找最优成本
     costs = [r.total_cost for r in results]
@@ -50,16 +56,16 @@ def run_all():
 
     # 输出对比表
     print()
-    print("=" * 70)
-    print("  对比结果")
-    print("=" * 70)
-    print(f"{'方法':<12} {'总成本':>8} {'启用数':>6} {'总能耗(Wh)':>10} {'超时(min)':>8} {'计算耗时(s)':>10}")
-    print("-" * 70)
+    print("=" * 80)
+    print("  对比结果（固定时间预算）")
+    print("=" * 80)
+    print(f"{'方法':<12} {'总成本':>8} {'启用数':>6} {'总能耗':>10} {'超时(min)':>8} {'评估次数':>10} {'耗时(s)':>8}")
+    print("-" * 80)
 
     for m, (method_key, method_name) in enumerate(methods):
         r = results[m]
         gap = (r.total_cost - best_cost) / best_cost * 100 if best_cost > 0 else 0
-        print(f"{method_name:<12} {r.total_cost:>8.1f} {r.n_enabled:>6} {r.total_energy:>10.0f} {r.total_late * 60:>8.1f} {times[m]:>10.2f}  (gap {gap:.1f}%)")
+        print(f"{method_name:<12} {r.total_cost:>8.1f} {r.n_enabled:>6} {r.total_energy:>10.0f} {r.total_late * 60:>8.1f} {eval_counts[m]:>10} {times[m]:>8.2f}  (gap {gap:.1f}%)")
 
     print()
 
